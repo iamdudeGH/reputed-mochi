@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReputedMochi - Web3 Project Reviews</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <img src="mochi.jpg" alt="Mochi" class="logo-image">
+                    <div class="logo-text">
+                        <h1>ReputedMochi</h1>
+                        <p class="tagline">Honest Reviews, Verified On-Chain</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="addNetworkBtn" class="btn btn-secondary">
+                        ➕ Add GenLayer Network
+                    </button>
+                    <button id="connectWalletBtn" class="btn btn-primary">
+                        🔗 Connect Wallet
+                    </button>
+                    <div id="walletInfo" class="wallet-info" style="display: none;">
+                        <span id="walletAddress"></span>
+                        <button id="disconnectBtn" class="btn btn-small">Disconnect</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Dashboard Section -->
+            <section id="dashboardSection" class="section" style="display: none;">
+                <h2>📊 My Dashboard</h2>
+                <div class="dashboard-grid">
+                    <!-- Balance Card -->
+                    <div class="card">
+                        <h3>💰 Balance</h3>
+                        <div class="stat-large" id="balance">0</div>
+                        <p class="stat-label">GEN Tokens</p>
+                        <div class="stat-detail">
+                            <span>Reviews Possible: <strong id="reviewsPossible">0</strong></span>
+                        </div>
+                        <button class="btn btn-primary" onclick="showDepositModal()">💵 Deposit Tokens</button>
+                    </div>
+
+                    <!-- Reviews Stats Card -->
+                    <div class="card">
+                        <h3>📝 Review Stats</h3>
+                        <div class="stats-row">
+                            <div class="stat-item">
+                                <div class="stat-value" id="totalReviews">0</div>
+                                <div class="stat-label">Total Reviews</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value success" id="approvedReviews">0</div>
+                                <div class="stat-label">Approved</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value warning" id="flaggedReviews">0</div>
+                                <div class="stat-label">Flagged</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Earnings Card -->
+                    <div class="card">
+                        <h3>💸 Earnings</h3>
+                        <div class="stats-row">
+                            <div class="stat-item">
+                                <div class="stat-value" id="totalDeposited">0</div>
+                                <div class="stat-label">Deposited</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value success" id="totalRefunded">0</div>
+                                <div class="stat-label">Refunded</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value error" id="totalSlashed">0</div>
+                                <div class="stat-label">Slashed</div>
+                            </div>
+                        </div>
+                        <div class="stat-detail">
+                            <span>Net Earnings: <strong id="netEarnings">0</strong> GEN</span>
+                        </div>
+                    </div>
+
+                    <!-- Community Stats Card -->
+                    <div class="card">
+                        <h3>👍 Community</h3>
+                        <div class="stat-large" id="helpfulVotes">0</div>
+                        <p class="stat-label">Helpful Votes Received</p>
+                        <div class="stat-detail">
+                            <span>Stake per Review: <strong id="stakePerReview">100</strong> GEN</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Navigation Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="browse">🔍 Browse Projects</button>
+                <button class="tab-btn" data-tab="submit">✍️ Submit Review</button>
+                <button class="tab-btn" data-tab="myReviews">📄 My Reviews</button>
+                <button class="tab-btn" data-tab="transactions">💳 Transactions</button>
+                <button class="tab-btn" data-tab="register">➕ Register Project</button>
+            </div>
+
+            <!-- Browse Projects Tab -->
+            <section id="browseTab" class="tab-content active">
+                <div class="section-header">
+                    <h2>🔍 Browse Projects</h2>
+                    <button class="btn btn-secondary" onclick="loadAllProjects()">🔄 Refresh</button>
+                </div>
+                <div id="projectsList" class="projects-grid">
+                    <p class="empty-state">Loading projects...</p>
+                </div>
+            </section>
+
+            <!-- Submit Review Tab -->
+            <section id="submitTab" class="tab-content">
+                <h2>✍️ Submit Review</h2>
+                <div class="card">
+                    <form id="reviewForm" onsubmit="submitReview(event)">
+                        <div class="form-group">
+                            <label>Project Name *</label>
+                            <input type="text" id="reviewProjectName" list="projectNamesList" required placeholder="Select or type project name" autocomplete="off">
+                            <datalist id="projectNamesList">
+                                <!-- Will be populated dynamically -->
+                            </datalist>
+                            <small>Select from dropdown or type project name (case-sensitive)</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Star Rating *</label>
+                            <div class="star-rating">
+                                <input type="radio" name="rating" value="5" id="star5" required>
+                                <label for="star5">⭐⭐⭐⭐⭐</label>
+                                <input type="radio" name="rating" value="4" id="star4">
+                                <label for="star4">⭐⭐⭐⭐</label>
+                                <input type="radio" name="rating" value="3" id="star3">
+                                <label for="star3">⭐⭐⭐</label>
+                                <input type="radio" name="rating" value="2" id="star2">
+                                <label for="star2">⭐⭐</label>
+                                <input type="radio" name="rating" value="1" id="star1">
+                                <label for="star1">⭐</label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Review Text *</label>
+                            <textarea id="reviewText" required minlength="10" rows="6" 
+                                placeholder="Share your detailed experience with this project. Include specific features, pros, cons, and overall impression. (Minimum 10 characters)"></textarea>
+                            <small>Be specific and honest. Quality reviews get full refunds!</small>
+                        </div>
+
+                        <div class="form-info">
+                            <p>💰 <strong>Stake Required:</strong> <span id="stakeRequired">100</span> GEN</p>
+                            <p>✅ <strong>Quality reviews get full refund!</strong></p>
+                            <p>⚠️ <strong>Low quality reviews may be penalized</strong></p>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-large">
+                            📝 Submit Review (Stake: <span id="stakeRequiredBtn">100</span> GEN)
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- My Reviews Tab -->
+            <section id="myReviewsTab" class="tab-content">
+                <div class="section-header">
+                    <h2>📄 My Reviews</h2>
+                    <button class="btn btn-secondary" onclick="loadMyReviews()">🔄 Refresh</button>
+                </div>
+                <div id="myReviewsList">
+                    <p class="empty-state">Loading your reviews...</p>
+                </div>
+            </section>
+
+            <!-- Transactions Tab -->
+            <section id="transactionsTab" class="tab-content">
+                <div class="section-header">
+                    <h2>💳 Transaction History</h2>
+                    <button class="btn btn-secondary" onclick="loadTransactions()">🔄 Refresh</button>
+                </div>
+                <div id="transactionsList">
+                    <p class="empty-state">Loading transactions...</p>
+                </div>
+            </section>
+
+            <!-- Register Project Tab -->
+            <section id="registerTab" class="tab-content">
+                <h2>➕ Register New Project</h2>
+                <div class="card">
+                    <form id="registerForm" onsubmit="registerProject(event)">
+                        <div class="form-group">
+                            <label>Project Name *</label>
+                            <input type="text" id="projectName" required minlength="2" maxlength="100" 
+                                placeholder="e.g., Uniswap">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Category *</label>
+                            <select id="projectCategory" required>
+                                <option value="">Select category...</option>
+                                <option value="DeFi">DeFi</option>
+                                <option value="NFT">NFT</option>
+                                <option value="Gaming">Gaming</option>
+                                <option value="Infrastructure">Infrastructure</option>
+                                <option value="DAO">DAO</option>
+                                <option value="Wallet">Wallet</option>
+                                <option value="Bridge">Bridge</option>
+                                <option value="Oracle">Oracle</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Description *</label>
+                            <textarea id="projectDescription" required rows="4" 
+                                placeholder="Describe your project..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Website *</label>
+                            <input type="url" id="projectWebsite" required 
+                                placeholder="https://yourproject.com">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-large">
+                            ✅ Register Project
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Deposit Modal -->
+    <div id="depositModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDepositModal()">&times;</span>
+            <h2>💵 Deposit Tokens</h2>
+            <form id="depositForm" onsubmit="depositTokens(event)">
+                <div class="form-group">
+                    <label>Amount (GEN) *</label>
+                    <input type="number" id="depositAmount" required min="1" placeholder="100">
+                    <small>Each review requires 100 GEN stake</small>
+                </div>
+                <div class="deposit-quick-actions">
+                    <button type="button" class="btn btn-small" onclick="setDepositAmount(100)">100 GEN</button>
+                    <button type="button" class="btn btn-small" onclick="setDepositAmount(500)">500 GEN</button>
+                    <button type="button" class="btn btn-small" onclick="setDepositAmount(1000)">1000 GEN</button>
+                </div>
+                <button type="submit" class="btn btn-primary btn-large">💰 Deposit</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Network Setup Modal -->
+    <div id="networkModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeNetworkModal()">&times;</span>
+            <h2>🌐 Add GenLayer Network</h2>
+            <p>To use ReputedMochi, you need to add the GenLayer network to MetaMask.</p>
+            <div class="network-info">
+                <p><strong>Network Name:</strong> GenLayer Studio</p>
+                <p><strong>RPC URL:</strong> https://studio.genlayer.com/api</p>
+                <p><strong>Chain ID:</strong> 61999 (0xf22f)</p>
+                <p><strong>Currency:</strong> GEN</p>
+            </div>
+            <button class="btn btn-primary" onclick="addGenLayerNetwork()">✅ Add Network</button>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p id="loadingText">Processing...</p>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p><img src="mochi.jpg" alt="Mochi" class="footer-logo"> ReputedMochi - Decentralized Web3 Project Reviews</p>
+            <p>Powered by <a href="https://genlayer.com" target="_blank">GenLayer</a></p>
+        </div>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>

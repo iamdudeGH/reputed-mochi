@@ -1,0 +1,22 @@
+﻿# Git Setup Commands for ReputedMochi
+
+# Navigate to production folder
+cd reputed-mochi-production
+
+# Initialize git repository
+git init
+
+# Add all files
+git add .
+
+# Make first commit
+git commit -m "Initial commit - ReputedMochi v1.0"
+
+# Add remote (replace with your GitHub URL)
+git remote add origin https://github.com/iamdudeGH/reputed-mochi.git
+
+# Push to GitHub
+git branch -M main
+git push -u origin main
+
+# Done! 🎉
