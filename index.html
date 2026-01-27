@@ -3,24 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ReputedMochi - Web3 Project Reviews</title>
-    <link rel="stylesheet" href="style.css">
+    <title>ReputedMochi - Web3 Project Reviews | Powered by GenLayer</title>
+    <link rel="stylesheet" href="style-new.css">
 </head>
 <body>
-    <!-- Header -->
+    <!-- Navigation Header -->
     <header class="header">
         <div class="container">
             <div class="header-content">
-                <div class="logo">
-                    <img src="mochi.jpg" alt="Mochi" class="logo-image">
-                    <div class="logo-text">
+                <!-- Brand Logo -->
+                <div class="brand-logo">
+                    <img src="mochi.jpg" alt="Mochi" class="logo-icon-img">
+                    <div class="brand-text">
                         <h1>ReputedMochi</h1>
                         <p class="tagline">Honest Reviews, Verified On-Chain</p>
                     </div>
                 </div>
+
+                <!-- Navigation -->
+                <nav class="nav-menu">
+                    <a href="#home" class="nav-link active" data-page="home">Home</a>
+                    <a href="#projects" class="nav-link" data-page="projects">Projects</a>
+                    <a href="#profile" class="nav-link" data-page="profile">My Profile</a>
+                    <a href="#register" class="nav-link" data-page="register">Register</a>
+                </nav>
+
+                <!-- Powered by GenLayer Badge -->
+                <div class="powered-by">
+                    <span class="powered-label">Powered by</span>
+                    <img src="Genlayerlogo.jpg" alt="GenLayer" class="genlayer-logo">
+                    <span class="genlayer-badge">GenLayer</span>
+                </div>
+
+                <!-- Wallet Actions -->
                 <div class="header-actions">
                     <button id="addNetworkBtn" class="btn btn-secondary">
-                        ➕ Add GenLayer Network
+                        ➕ Add Network
                     </button>
                     <button id="connectWalletBtn" class="btn btn-primary">
                         🔗 Connect Wallet
@@ -34,174 +52,359 @@
         </div>
     </header>
 
-    <!-- Main Content -->
+    <!-- Main Content Area -->
     <main class="main-content">
-        <div class="container">
-            <!-- Dashboard Section -->
-            <section id="dashboardSection" class="section" style="display: none;">
-                <h2>📊 My Dashboard</h2>
-                <div class="dashboard-grid">
-                    <!-- Balance Card -->
-                    <div class="card">
-                        <h3>💰 Balance</h3>
-                        <div class="stat-large" id="balance">0</div>
-                        <p class="stat-label">GEN Tokens</p>
-                        <div class="stat-detail">
-                            <span>Reviews Possible: <strong id="reviewsPossible">0</strong></span>
+        <!-- Home Page -->
+        <div id="page-home" class="page active">
+            <div class="container">
+                <!-- Hero Section -->
+                <section class="hero-section">
+                    <h2>Decentralized Reputation for Web3 Projects</h2>
+                    <p class="hero-subtitle">Submit honest reviews, earn rewards, and help the community make informed decisions</p>
+                    <div class="hero-stats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalProjectsHome">0</div>
+                            <div class="stat-label">Projects</div>
                         </div>
-                        <button class="btn btn-primary" onclick="showDepositModal()">💵 Deposit Tokens</button>
-                    </div>
-
-                    <!-- Reviews Stats Card -->
-                    <div class="card">
-                        <h3>📝 Review Stats</h3>
-                        <div class="stats-row">
-                            <div class="stat-item">
-                                <div class="stat-value" id="totalReviews">0</div>
-                                <div class="stat-label">Total Reviews</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value success" id="approvedReviews">0</div>
-                                <div class="stat-label">Approved</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value warning" id="flaggedReviews">0</div>
-                                <div class="stat-label">Flagged</div>
-                            </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalReviewsHome">0</div>
+                            <div class="stat-label">Reviews</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">100</div>
+                            <div class="stat-label">GEN per Review</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">5000</div>
+                            <div class="stat-label">GEN to Register Project</div>
                         </div>
                     </div>
+                </section>
 
-                    <!-- Earnings Card -->
-                    <div class="card">
-                        <h3>💸 Earnings</h3>
-                        <div class="stats-row">
-                            <div class="stat-item">
-                                <div class="stat-value" id="totalDeposited">0</div>
-                                <div class="stat-label">Deposited</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value success" id="totalRefunded">0</div>
-                                <div class="stat-label">Refunded</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value error" id="totalSlashed">0</div>
-                                <div class="stat-label">Slashed</div>
-                            </div>
-                        </div>
-                        <div class="stat-detail">
-                            <span>Net Earnings: <strong id="netEarnings">0</strong> GEN</span>
-                        </div>
+                <!-- Top Rated Projects -->
+                <section class="section">
+                    <div class="section-header">
+                        <h3>🏆 Top Rated Projects</h3>
+                        <a href="#projects" class="link-button" onclick="navigateTo('projects')">View All →</a>
                     </div>
-
-                    <!-- Community Stats Card -->
-                    <div class="card">
-                        <h3>👍 Community</h3>
-                        <div class="stat-large" id="helpfulVotes">0</div>
-                        <p class="stat-label">Helpful Votes Received</p>
-                        <div class="stat-detail">
-                            <span>Stake per Review: <strong id="stakePerReview">100</strong> GEN</span>
-                        </div>
+                    <div id="topProjectsList" class="projects-grid">
+                        <p class="empty-state">Loading top projects...</p>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- Navigation Tabs -->
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="browse">🔍 Browse Projects</button>
-                <button class="tab-btn" data-tab="submit">✍️ Submit Review</button>
-                <button class="tab-btn" data-tab="myReviews">📄 My Reviews</button>
-                <button class="tab-btn" data-tab="transactions">💳 Transactions</button>
-                <button class="tab-btn" data-tab="register">➕ Register Project</button>
+                <!-- Recent Reviews -->
+                <section class="section">
+                    <h3>📝 Recent Reviews</h3>
+                    <div id="recentReviewsList" class="reviews-list">
+                        <p class="empty-state">Loading recent reviews...</p>
+                    </div>
+                </section>
             </div>
+        </div>
 
-            <!-- Browse Projects Tab -->
-            <section id="browseTab" class="tab-content active">
-                <div class="section-header">
-                    <h2>🔍 Browse Projects</h2>
-                    <button class="btn btn-secondary" onclick="loadAllProjects()">🔄 Refresh</button>
-                </div>
-                <div id="projectsList" class="projects-grid">
-                    <p class="empty-state">Loading projects...</p>
-                </div>
-            </section>
+        <!-- Projects Page -->
+        <div id="page-projects" class="page">
+            <div class="container">
+                <section class="section">
+                    <h2>Browse Web3 Projects</h2>
+                    
+                    <!-- Search and Filters -->
+                    <div class="filters-bar">
+                        <input type="text" id="projectSearch" placeholder="🔍 Search projects..." class="search-input">
+                        <select id="categoryFilter" class="filter-select">
+                            <option value="">All Categories</option>
+                            <option value="DeFi">DeFi</option>
+                            <option value="NFT">NFT</option>
+                            <option value="Gaming">Gaming</option>
+                            <option value="Infrastructure">Infrastructure</option>
+                            <option value="DAO">DAO</option>
+                            <option value="Wallet">Wallet</option>
+                            <option value="Bridge">Bridge</option>
+                            <option value="Oracle">Oracle</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <select id="sortFilter" class="filter-select">
+                            <option value="rating">Highest Rated</option>
+                            <option value="reviews">Most Reviews</option>
+                            <option value="recent">Recently Added</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="loadAllProjects()">🔄 Refresh</button>
+                    </div>
 
-            <!-- Submit Review Tab -->
-            <section id="submitTab" class="tab-content">
-                <h2>✍️ Submit Review</h2>
-                <div class="card">
-                    <form id="reviewForm" onsubmit="submitReview(event)">
-                        <div class="form-group">
-                            <label>Project Name *</label>
-                            <input type="text" id="reviewProjectName" list="projectNamesList" required placeholder="Select or type project name" autocomplete="off">
-                            <datalist id="projectNamesList">
-                                <!-- Will be populated dynamically -->
-                            </datalist>
-                            <small>Select from dropdown or type project name (case-sensitive)</small>
+                    <!-- Projects Grid -->
+                    <div id="projectsListFull" class="projects-grid">
+                        <p class="empty-state">Loading projects...</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- Project Detail Page -->
+        <div id="page-project-detail" class="page">
+            <div class="container">
+                <button class="btn btn-secondary" onclick="navigateTo('projects')">← Back to Projects</button>
+                
+                <section class="section project-detail">
+                    <div id="projectDetailContent">
+                        <!-- Will be populated dynamically -->
+                    </div>
+                </section>
+
+                <section class="section">
+                    <div class="section-header">
+                        <h3>📝 Reviews</h3>
+                        <button class="btn btn-primary" onclick="reviewCurrentProject()">Write Review</button>
+                    </div>
+                    <div id="projectReviewsList" class="reviews-list">
+                        <!-- Will be populated dynamically -->
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- My Profile Page -->
+        <div id="page-profile" class="page">
+            <div class="container">
+                <!-- Profile not connected -->
+                <section class="section" id="profileNotConnected">
+                    <h2>👤 My Profile</h2>
+                    <div class="empty-state">
+                        <p>Please connect wallet to view your profile</p>
+                    </div>
+                </section>
+
+                <!-- Profile Setup (first-time users) -->
+                <section class="section" id="profileSetup" style="display: none;">
+                    <h2>👤 Create Your Profile</h2>
+                    <p class="section-description">Set up your profile to start reviewing projects</p>
+                    
+                    <div class="card">
+                        <form id="createProfileForm" onsubmit="return false;">
+                            <div class="form-group">
+                                <label for="setupUsername">Username *</label>
+                                <input type="text" id="setupUsername" required minlength="3" maxlength="20" placeholder="Enter username (3-20 characters)">
+                                <small id="usernameAvailability" class="form-hint"></small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setupBio">Bio</label>
+                                <textarea id="setupBio" rows="4" maxlength="500" placeholder="Tell us about yourself (optional, max 500 characters)"></textarea>
+                                <small class="form-hint" id="bioCharCount">0 / 500</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setupAvatar">Avatar URL</label>
+                                <input type="url" id="setupAvatar" placeholder="https://example.com/avatar.jpg (optional)">
+                                <small class="form-hint">Image URL for your profile picture</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setupTwitter">Twitter</label>
+                                <input type="text" id="setupTwitter" placeholder="@username (optional)">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setupGithub">GitHub</label>
+                                <input type="text" id="setupGithub" placeholder="username (optional)">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="setupWebsite">Website</label>
+                                <input type="url" id="setupWebsite" placeholder="https://example.com (optional)">
+                            </div>
+
+                            <button type="button" class="btn btn-primary" onclick="createProfile()">
+                                ✅ Create Profile
+                            </button>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Profile Display (existing users) -->
+                <section class="section" id="profileDisplay" style="display: none;">
+                    <div class="profile-header">
+                        <img id="profileAvatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23e0e0e0' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='48'%3E👤%3C/text%3E%3C/svg%3E" alt="Avatar" class="profile-avatar">
+                        <div class="profile-info">
+                            <h2 id="profileUsername">Loading...</h2>
+                            <p class="profile-address" id="profileAddress">0x...</p>
+                            <p class="profile-joined">Joined: <span id="profileJoined">...</span></p>
+                        </div>
+                        <button class="btn btn-secondary" onclick="showProfileEditMode()">✏️ Edit Profile</button>
+                    </div>
+
+                    <div class="profile-details">
+                        <div class="profile-bio">
+                            <h3>About</h3>
+                            <p id="profileBio">No bio yet</p>
                         </div>
 
-                        <div class="form-group">
-                            <label>Star Rating *</label>
-                            <div class="star-rating">
-                                <input type="radio" name="rating" value="5" id="star5" required>
-                                <label for="star5">⭐⭐⭐⭐⭐</label>
-                                <input type="radio" name="rating" value="4" id="star4">
-                                <label for="star4">⭐⭐⭐⭐</label>
-                                <input type="radio" name="rating" value="3" id="star3">
-                                <label for="star3">⭐⭐⭐</label>
-                                <input type="radio" name="rating" value="2" id="star2">
-                                <label for="star2">⭐⭐</label>
-                                <input type="radio" name="rating" value="1" id="star1">
-                                <label for="star1">⭐</label>
+                        <div class="profile-links">
+                            <h3>Links</h3>
+                            <div id="profileLinksContainer">
+                                <p class="empty-state">No links added</p>
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label>Review Text *</label>
-                            <textarea id="reviewText" required minlength="10" rows="6" 
-                                placeholder="Share your detailed experience with this project. Include specific features, pros, cons, and overall impression. (Minimum 10 characters)"></textarea>
-                            <small>Be specific and honest. Quality reviews get full refunds!</small>
+                        <div class="profile-stats">
+                            <h3>📊 Stats</h3>
+                            <div class="stats-grid">
+                                <div class="stat-box">
+                                    <div class="stat-value" id="profileTotalReviews">0</div>
+                                    <div class="stat-label">Reviews</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value success" id="profileApprovedReviews">0</div>
+                                    <div class="stat-label">Approved</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value" id="profileHelpfulVotes">0</div>
+                                    <div class="stat-label">Helpful Votes</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Profile Edit Mode -->
+                <section class="section" id="profileEdit" style="display: none;">
+                    <h2>✏️ Edit Profile</h2>
+                    
+                    <div class="card">
+                        <form id="updateProfileForm" onsubmit="return false;">
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" id="editUsername" disabled>
+                                <small class="form-hint">Username cannot be changed</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editBio">Bio</label>
+                                <textarea id="editBio" rows="4" maxlength="500" placeholder="Tell us about yourself"></textarea>
+                                <small class="form-hint" id="editBioCharCount">0 / 500</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editAvatar">Avatar URL</label>
+                                <input type="url" id="editAvatar" placeholder="https://example.com/avatar.jpg">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editTwitter">Twitter</label>
+                                <input type="text" id="editTwitter" placeholder="@username">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editGithub">GitHub</label>
+                                <input type="text" id="editGithub" placeholder="username">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="editWebsite">Website</label>
+                                <input type="url" id="editWebsite" placeholder="https://example.com">
+                            </div>
+
+                            <div class="button-group">
+                                <button type="button" class="btn btn-primary" onclick="updateProfile()">
+                                    💾 Save Changes
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="cancelProfileEdit()">
+                                    ❌ Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Dashboard when connected -->
+                <div id="dashboardContent" style="display: none;">
+                    <!-- Balance Card -->
+                    <section class="section">
+                        <h3>💰 Balance</h3>
+                        <div class="dashboard-grid">
+                            <div class="card">
+                                <div class="stat-large" id="balance">0</div>
+                                <p class="stat-label">GEN Tokens</p>
+                                <div class="stat-detail">
+                                    <span>Reviews Possible: <strong id="reviewsPossible">0</strong></span>
+                                </div>
+                                <button class="btn btn-primary" onclick="showDepositModal()">💵 Deposit Tokens</button>
+                            </div>
+
+                            <div class="card">
+                                <h4>📊 Review Stats</h4>
+                                <div class="stats-row">
+                                    <div class="stat-item">
+                                        <div class="stat-value" id="totalReviews">0</div>
+                                        <div class="stat-label">Total</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value success" id="approvedReviews">0</div>
+                                        <div class="stat-label">Approved</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value warning" id="flaggedReviews">0</div>
+                                        <div class="stat-label">Flagged</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <h4>💸 Earnings</h4>
+                                <div class="stats-row">
+                                    <div class="stat-item">
+                                        <div class="stat-value" id="totalDeposited">0</div>
+                                        <div class="stat-label">Deposited</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value success" id="totalRefunded">0</div>
+                                        <div class="stat-label">Refunded</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-value error" id="totalSlashed">0</div>
+                                        <div class="stat-label">Slashed</div>
+                                    </div>
+                                </div>
+                                <div class="stat-detail">
+                                    <span>Net: <strong id="netEarnings">0</strong> GEN</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Tabs for My Reviews and Transactions -->
+                    <section class="section">
+                        <div class="tabs">
+                            <button class="tab-btn active" data-tab="myReviews">📄 My Reviews</button>
+                            <button class="tab-btn" data-tab="transactions">💳 Transactions</button>
                         </div>
 
-                        <div class="form-info">
-                            <p>💰 <strong>Stake Required:</strong> <span id="stakeRequired">100</span> GEN</p>
-                            <p>✅ <strong>Quality reviews get full refund!</strong></p>
-                            <p>⚠️ <strong>Low quality reviews may be penalized</strong></p>
+                        <div id="tab-myReviews" class="tab-content active">
+                            <div id="myReviewsList">
+                                <p class="empty-state">Loading your reviews...</p>
+                            </div>
                         </div>
 
-                        <button type="submit" class="btn btn-primary btn-large">
-                            📝 Submit Review (Stake: <span id="stakeRequiredBtn">100</span> GEN)
-                        </button>
-                    </form>
+                        <div id="tab-transactions" class="tab-content">
+                            <div id="transactionsList">
+                                <p class="empty-state">Loading transactions...</p>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-            </section>
+            </div>
+        </div>
 
-            <!-- My Reviews Tab -->
-            <section id="myReviewsTab" class="tab-content">
-                <div class="section-header">
-                    <h2>📄 My Reviews</h2>
-                    <button class="btn btn-secondary" onclick="loadMyReviews()">🔄 Refresh</button>
-                </div>
-                <div id="myReviewsList">
-                    <p class="empty-state">Loading your reviews...</p>
-                </div>
-            </section>
-
-            <!-- Transactions Tab -->
-            <section id="transactionsTab" class="tab-content">
-                <div class="section-header">
-                    <h2>💳 Transaction History</h2>
-                    <button class="btn btn-secondary" onclick="loadTransactions()">🔄 Refresh</button>
-                </div>
-                <div id="transactionsList">
-                    <p class="empty-state">Loading transactions...</p>
-                </div>
-            </section>
-
-            <!-- Register Project Tab -->
-            <section id="registerTab" class="tab-content">
-                <h2>➕ Register New Project</h2>
-                <div class="card">
-                    <form id="registerForm" onsubmit="registerProject(event)">
+        <!-- Register Project Page -->
+        <div id="page-register" class="page">
+            <div class="container">
+                <section class="section">
+                    <h2>➕ Register New Project</h2>
+                    <div class="form-info" style="margin-bottom: 2rem;">
+                        <p><strong>⚠️ Registration Requirement:</strong></p>
+                        <p>💰 <strong>5000 GEN</strong> stake required to register a project</p>
+                        <p>This prevents spam and ensures only serious projects are listed.</p>
+                    </div>
+                    <form id="registerForm" onsubmit="registerProject(event)" class="form-large">
                         <div class="form-group">
                             <label>Project Name *</label>
                             <input type="text" id="projectName" required minlength="2" maxlength="100" 
@@ -226,7 +429,7 @@
 
                         <div class="form-group">
                             <label>Description *</label>
-                            <textarea id="projectDescription" required rows="4" 
+                            <textarea id="projectDescription" required rows="6" 
                                 placeholder="Describe your project..."></textarea>
                         </div>
 
@@ -237,15 +440,15 @@
                         </div>
 
                         <button type="submit" class="btn btn-primary btn-large">
-                            ✅ Register Project
+                            ✅ Register Project (Stake: 5000 GEN)
                         </button>
                     </form>
-                </div>
-            </section>
+                </section>
+            </div>
         </div>
     </main>
 
-    <!-- Deposit Modal -->
+    <!-- Modals -->
     <div id="depositModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeDepositModal()">&times;</span>
@@ -257,26 +460,77 @@
                     <small>Each review requires 100 GEN stake</small>
                 </div>
                 <div class="deposit-quick-actions">
-                    <button type="button" class="btn btn-small" onclick="setDepositAmount(100)">100 GEN</button>
-                    <button type="button" class="btn btn-small" onclick="setDepositAmount(500)">500 GEN</button>
-                    <button type="button" class="btn btn-small" onclick="setDepositAmount(1000)">1000 GEN</button>
+                    <button type="button" class="btn btn-small" onclick="setDepositAmount(100)">100</button>
+                    <button type="button" class="btn btn-small" onclick="setDepositAmount(500)">500</button>
+                    <button type="button" class="btn btn-small" onclick="setDepositAmount(1000)">1000</button>
                 </div>
                 <button type="submit" class="btn btn-primary btn-large">💰 Deposit</button>
             </form>
         </div>
     </div>
 
-    <!-- Network Setup Modal -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeReviewModal()">&times;</span>
+            <h2>✍️ Submit Review</h2>
+            
+            <!-- Balance Warning -->
+            <div id="reviewBalanceWarning" class="balance-warning" style="display: none;">
+                <p>⚠️ <strong>Insufficient Balance!</strong></p>
+                <p>You need 100 GEN to submit a review. Current balance: <strong id="reviewCurrentBalance">0</strong> GEN</p>
+                <button type="button" class="btn btn-secondary" onclick="closeReviewModal(); openDepositModal();">💵 Deposit Tokens</button>
+            </div>
+            
+            <!-- Balance Info -->
+            <div id="reviewBalanceInfo" class="balance-info">
+                <p>💰 Your Balance: <strong id="reviewBalanceDisplay">Loading...</strong> GEN | Required: <strong>100 GEN</strong></p>
+            </div>
+            
+            <form id="reviewForm" onsubmit="submitReview(event)">
+                <div class="form-group">
+                    <label>Project *</label>
+                    <input type="text" id="reviewProjectName" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label>Star Rating *</label>
+                    <div class="star-rating">
+                        <input type="radio" name="rating" value="5" id="star5" required>
+                        <label for="star5">⭐⭐⭐⭐⭐</label>
+                        <input type="radio" name="rating" value="4" id="star4">
+                        <label for="star4">⭐⭐⭐⭐</label>
+                        <input type="radio" name="rating" value="3" id="star3">
+                        <label for="star3">⭐⭐⭐</label>
+                        <input type="radio" name="rating" value="2" id="star2">
+                        <label for="star2">⭐⭐</label>
+                        <input type="radio" name="rating" value="1" id="star1">
+                        <label for="star1">⭐</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Review Text *</label>
+                    <textarea id="reviewText" required minlength="10" rows="6" 
+                        placeholder="Share your experience..."></textarea>
+                    <small>Quality reviews get full refunds!</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-large" id="submitReviewBtn">
+                    📝 Submit Review (100 GEN)
+                </button>
+            </form>
+        </div>
+    </div>
+
     <div id="networkModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeNetworkModal()">&times;</span>
             <h2>🌐 Add GenLayer Network</h2>
-            <p>To use ReputedMochi, you need to add the GenLayer network to MetaMask.</p>
+            <p>Add GenLayer to MetaMask to use ReputedMochi</p>
             <div class="network-info">
-                <p><strong>Network Name:</strong> GenLayer Studio</p>
-                <p><strong>RPC URL:</strong> https://studio.genlayer.com/api</p>
-                <p><strong>Chain ID:</strong> 61999 (0xf22f)</p>
-                <p><strong>Currency:</strong> GEN</p>
+                <p><strong>Network:</strong> GenLayer Studio</p>
+                <p><strong>RPC:</strong> https://studio.genlayer.com/api</p>
+                <p><strong>Chain ID:</strong> 61999</p>
             </div>
             <button class="btn btn-primary" onclick="addGenLayerNetwork()">✅ Add Network</button>
         </div>
@@ -288,17 +542,44 @@
         <p id="loadingText">Processing...</p>
     </div>
 
-    <!-- Toast Notifications -->
+    <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <p><img src="mochi.jpg" alt="Mochi" class="footer-logo"> ReputedMochi - Decentralized Web3 Project Reviews</p>
-            <p>Powered by <a href="https://genlayer.com" target="_blank">GenLayer</a></p>
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3><img src="mochi.jpg" alt="Mochi" class="footer-mochi-icon"> ReputedMochi</h3>
+                    <p class="footer-tagline">Honest Reviews, Verified On-Chain</p>
+                    <div class="footer-logo">
+                        <img src="Genlayerlogo.jpg" alt="GenLayer" class="footer-genlayer-logo">
+                        <span>Powered by GenLayer</span>
+                    </div>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Platform</h4>
+                    <a href="#projects" onclick="navigateTo('projects')">Browse Projects</a>
+                    <a href="#register" onclick="navigateTo('register')">Register Project</a>
+                    <a href="#profile" onclick="navigateTo('profile')">My Profile</a>
+                </div>
+
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <a href="https://genlayer.com" target="_blank">GenLayer</a>
+                    <a href="https://studio.genlayer.com" target="_blank">GenLayer Studio</a>
+                    <a href="https://github.com/yeagerai/genlayer-js" target="_blank">Documentation</a>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>© 2026 ReputedMochi. Built on GenLayer Intelligent Contracts.</p>
+                <p>Contract: <code id="footerContractAddress">Loading...</code></p>
+            </div>
         </div>
     </footer>
 
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app-new.js"></script>
 </body>
 </html>

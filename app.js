@@ -1,51 +1,135 @@
-// ReputedMochi Web3 App
+// ReputedMochi - Multi-Page Web3 App with Routing
 import { createClient } from 'genlayer-js';
 import { studionet } from 'genlayer-js/chains';
 
-// Contract Address - Update this with your deployed contract address
-const CONTRACT_ADDRESS = '0xE059aC730dDc0B48Fc1649272CdbcC70BDd04193';
+// Contract Address
+const CONTRACT_ADDRESS = '0xBA5f185087B609405f1762C618895E271213A95B';
 
-// GenLayer Network Configuration
+// GenLayer Network
 const GENLAYER_NETWORK = {
-    chainId: '0xf22f', // 61999 in hex
+    chainId: '0xf22f',
     chainName: 'GenLayer Studio',
-    nativeCurrency: {
-        name: 'GEN',
-        symbol: 'GEN',
-        decimals: 18
-    },
-    rpcUrls: ['https://studio.genlayer.com/api'],
-    blockExplorerUrls: []
+    nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 },
+    rpcUrls: ['https://studio.genlayer.com/api']
 };
 
 // Global State
 let client = null;
 let currentAccount = null;
+let currentPage = 'home';
+let currentProjectName = null;
+let allProjects = [];
 
-// Initialize App
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    setupRouting();
     checkWalletConnection();
+    updateContractAddress();
 });
 
 // Setup Event Listeners
 function setupEventListeners() {
-    // Wallet buttons
-    document.getElementById('connectWalletBtn').addEventListener('click', connectWallet);
-    document.getElementById('disconnectBtn').addEventListener('click', disconnectWallet);
-    document.getElementById('addNetworkBtn').addEventListener('click', () => {
+    // Wallet
+    document.getElementById('connectWalletBtn')?.addEventListener('click', connectWallet);
+    document.getElementById('disconnectBtn')?.addEventListener('click', disconnectWallet);
+    document.getElementById('addNetworkBtn')?.addEventListener('click', () => {
         document.getElementById('networkModal').classList.add('active');
     });
 
-    // Tab navigation
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => switchTab(e.target.dataset.tab));
+    // Navigation
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = link.dataset.page;
+            navigateTo(page);
+        });
     });
 
-    // Account changed
+    // Profile tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tab = e.target.dataset.tab;
+            switchProfileTab(tab);
+        });
+    });
+
+    // Filters
+    document.getElementById('projectSearch')?.addEventListener('input', filterProjects);
+    document.getElementById('categoryFilter')?.addEventListener('change', filterProjects);
+    document.getElementById('sortFilter')?.addEventListener('change', filterProjects);
+
+    // MetaMask events
     if (window.ethereum) {
         window.ethereum.on('accountsChanged', handleAccountsChanged);
         window.ethereum.on('chainChanged', () => window.location.reload());
+    }
+}
+
+// Routing System
+function setupRouting() {
+    // Handle hash changes
+    window.addEventListener('hashchange', handleRouteChange);
+    handleRouteChange();
+}
+
+function handleRouteChange() {
+    const hash = window.location.hash.slice(1) || 'home';
+    const [page, ...params] = hash.split('/');
+    
+    if (page === 'project' && params[0]) {
+        navigateTo('project-detail', params[0]);
+    } else {
+        navigateTo(page);
+    }
+}
+
+function navigateTo(page, param = null) {
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    
+    // Update nav links
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.dataset.page === page) {
+            link.classList.add('active');
+        }
+    });
+    
+    // Show target page
+    const targetPage = document.getElementById(`page-${page}`);
+    if (targetPage) {
+        targetPage.classList.add('active');
+        currentPage = page;
+        
+        // Load page-specific data
+        loadPageData(page, param);
+        
+        // Update URL
+        if (page === 'project-detail' && param) {
+            window.location.hash = `project/${param}`;
+        } else {
+            window.location.hash = page;
+        }
+    }
+}
+
+window.navigateTo = navigateTo;
+
+function loadPageData(page, param) {
+    switch(page) {
+        case 'home':
+            loadHomePage();
+            break;
+        case 'projects':
+            loadProjectsPage();
+            break;
+        case 'project-detail':
+            if (param) loadProjectDetail(param);
+            break;
+        case 'profile':
+            loadProfilePage();
+            break;
     }
 }
 
@@ -53,41 +137,33 @@ function setupEventListeners() {
 async function connectWallet() {
     try {
         if (!window.ethereum) {
-            showToast('Please install MetaMask to use this dApp', 'error');
+            showToast('Please install MetaMask', 'error');
             return;
         }
 
         showLoading('Connecting wallet...');
 
-        // Request accounts
-        const accounts = await window.ethereum.request({
-            method: 'eth_requestAccounts'
-        });
-
-        if (accounts.length === 0) {
-            throw new Error('No accounts found');
-        }
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (accounts.length === 0) throw new Error('No accounts found');
 
         currentAccount = accounts[0];
 
-        // Check if on GenLayer network
+        // Check network
         const chainId = await window.ethereum.request({ method: 'eth_chainId' });
         if (chainId !== GENLAYER_NETWORK.chainId) {
             await switchToGenLayer();
         }
 
         // Initialize client
-        client = createClient({
-            chain: studionet,
-            account: currentAccount
-        });
+        client = createClient({ chain: studionet, account: currentAccount });
 
-        // Update UI
         updateWalletUI();
         await loadDashboard();
-        await loadAllProjects();
+        
+        // Reload current page data
+        loadPageData(currentPage);
 
-        showToast('Wallet connected successfully!', 'success');
+        showToast('Wallet connected!', 'success');
         hideLoading();
 
     } catch (error) {
@@ -104,7 +180,6 @@ async function switchToGenLayer() {
             params: [{ chainId: GENLAYER_NETWORK.chainId }]
         });
     } catch (error) {
-        // Chain not added, try to add it
         if (error.code === 4902) {
             await window.ethereum.request({
                 method: 'wallet_addEthereumChain',
@@ -125,7 +200,7 @@ window.addGenLayerNetwork = async function() {
         showToast('GenLayer network added!', 'success');
         closeNetworkModal();
     } catch (error) {
-        showToast(`Failed to add network: ${error.message}`, 'error');
+        showToast(`Failed: ${error.message}`, 'error');
     }
 }
 
@@ -133,7 +208,6 @@ function disconnectWallet() {
     currentAccount = null;
     client = null;
     updateWalletUI();
-    document.getElementById('dashboardSection').style.display = 'none';
     showToast('Wallet disconnected', 'success');
 }
 
@@ -142,26 +216,25 @@ function handleAccountsChanged(accounts) {
         disconnectWallet();
     } else if (accounts[0] !== currentAccount) {
         currentAccount = accounts[0];
+        client = createClient({ chain: studionet, account: currentAccount });
         updateWalletUI();
         loadDashboard();
+        loadPageData(currentPage);
     }
 }
 
 function updateWalletUI() {
     const connectBtn = document.getElementById('connectWalletBtn');
     const walletInfo = document.getElementById('walletInfo');
-    const dashboardSection = document.getElementById('dashboardSection');
 
     if (currentAccount) {
         connectBtn.style.display = 'none';
         walletInfo.style.display = 'flex';
-        dashboardSection.style.display = 'block';
         document.getElementById('walletAddress').textContent = 
             `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}`;
     } else {
         connectBtn.style.display = 'block';
         walletInfo.style.display = 'none';
-        dashboardSection.style.display = 'none';
     }
 }
 
@@ -170,76 +243,799 @@ async function checkWalletConnection() {
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
             currentAccount = accounts[0];
-            client = createClient({
-                chain: studionet,
-                account: currentAccount
-            });
+            client = createClient({ chain: studionet, account: currentAccount });
             updateWalletUI();
             await loadDashboard();
-            await loadAllProjects();
+            loadPageData(currentPage);
         }
     }
 }
 
-// Dashboard Functions
+// Dashboard
 async function loadDashboard() {
     if (!client || !currentAccount) return;
 
     try {
         const dashboard = await callContractRead('get_my_dashboard', [currentAccount]);
-        
-        console.log('Dashboard loaded:', dashboard);
-        
-        // Convert Map to object or use .get() method
-        const getVal = (key) => {
-            if (dashboard instanceof Map) {
-                return Number(dashboard.get(key) || 0);
-            }
-            return dashboard[key] || 0;
-        };
-        
-        // Update balance card
+        console.log('Dashboard:', dashboard);
+
+        const getVal = (key) => Number(dashboard instanceof Map ? dashboard.get(key) : dashboard[key] || 0);
+
         document.getElementById('balance').textContent = getVal('balance');
         document.getElementById('reviewsPossible').textContent = getVal('reviews_possible');
-        
-        // Update review stats
         document.getElementById('totalReviews').textContent = getVal('total_reviews');
         document.getElementById('approvedReviews').textContent = getVal('approved_reviews');
         document.getElementById('flaggedReviews').textContent = getVal('flagged_reviews');
-        
-        // Update earnings
         document.getElementById('totalDeposited').textContent = getVal('total_deposited');
         document.getElementById('totalRefunded').textContent = getVal('total_refunded');
         document.getElementById('totalSlashed').textContent = getVal('total_slashed');
         document.getElementById('netEarnings').textContent = getVal('net_earnings');
-        
-        // Update community stats
-        document.getElementById('helpfulVotes').textContent = getVal('helpful_votes_received');
-        document.getElementById('stakePerReview').textContent = getVal('stake_per_review') || 100;
-        
-        // Update stake amounts in forms
-        document.getElementById('stakeRequired').textContent = getVal('stake_per_review') || 100;
-        document.getElementById('stakeRequiredBtn').textContent = getVal('stake_per_review') || 100;
+
+        // Show dashboard content (only if on profile page)
+        const dashboardEl = document.getElementById('dashboardContent');
+        if (dashboardEl) {
+            dashboardEl.style.display = 'block';
+        }
 
     } catch (error) {
-        console.error('Dashboard load error:', error);
-        showToast('Failed to load dashboard', 'error');
+        console.error('Dashboard error:', error);
     }
 }
 
-// Deposit Functions
-window.showDepositModal = function() {
-    document.getElementById('depositModal').classList.add('active');
+// Home Page
+async function loadHomePage() {
+    // Can load public data even without wallet
+    try {
+        // If no client, create a temporary read-only one
+        let readClient = client;
+        if (!readClient) {
+            readClient = createClient({ chain: studionet });
+        }
+        
+        // Load stats
+        const stats = await readClient.readContract({
+            address: CONTRACT_ADDRESS,
+            functionName: 'get_stats',
+            args: []
+        });
+        const getVal = (key) => Number(stats instanceof Map ? stats.get(key) : stats[key] || 0);
+        
+        document.getElementById('totalProjectsHome').textContent = getVal('total_projects');
+        document.getElementById('totalReviewsHome').textContent = getVal('total_reviews');
+
+        // Load top projects
+        const projects = await readClient.readContract({
+            address: CONTRACT_ADDRESS,
+            functionName: 'get_all_projects',
+            args: []
+        });
+        allProjects = projects || [];
+        
+        const topProjects = [...allProjects]
+            .sort((a, b) => {
+                const scoreA = Number(a instanceof Map ? a.get('reputation_score') : a.reputation_score || 0);
+                const scoreB = Number(b instanceof Map ? b.get('reputation_score') : b.reputation_score || 0);
+                return scoreB - scoreA;
+            })
+            .slice(0, 6);
+
+        displayProjects(topProjects, 'topProjectsList');
+
+        // Load recent reviews from all projects
+        await loadRecentReviews(readClient);
+
+    } catch (error) {
+        console.error('Home page error:', error);
+        document.getElementById('topProjectsList').innerHTML = '<p class="empty-state">Failed to load projects. Please refresh.</p>';
+    }
 }
 
-window.closeDepositModal = function() {
-    document.getElementById('depositModal').classList.remove('active');
+async function loadRecentReviews(readClient) {
+    try {
+        // Get reviews from all projects
+        let allReviews = [];
+        
+        for (const project of allProjects.slice(0, 5)) { // Only check first 5 projects for performance
+            const getVal = (key) => project instanceof Map ? project.get(key) : project[key];
+            const projectName = getVal('name');
+            
+            if (projectName) {
+                const reviews = await readClient.readContract({
+                    address: CONTRACT_ADDRESS,
+                    functionName: 'get_reviews',
+                    args: [projectName, 5]
+                });
+                
+                if (reviews && reviews.length > 0) {
+                    allReviews = allReviews.concat(reviews);
+                }
+            }
+        }
+        
+        // Sort by timestamp (most recent first) and take top 5
+        const recentReviews = allReviews
+            .sort((a, b) => {
+                const timeA = a instanceof Map ? a.get('timestamp') : a.timestamp;
+                const timeB = b instanceof Map ? b.get('timestamp') : b.timestamp;
+                return new Date(timeB) - new Date(timeA);
+            })
+            .slice(0, 5);
+        
+        if (recentReviews.length === 0) {
+            document.getElementById('recentReviewsList').innerHTML = '<p class="empty-state">No reviews yet. Be the first to review a project!</p>';
+        } else {
+            displayReviews(recentReviews, 'recentReviewsList');
+        }
+        
+    } catch (error) {
+        console.error('Recent reviews error:', error);
+        document.getElementById('recentReviewsList').innerHTML = '<p class="empty-state">Failed to load recent reviews</p>';
+    }
 }
 
-window.setDepositAmount = function(amount) {
-    document.getElementById('depositAmount').value = amount;
+// Projects Page
+async function loadProjectsPage() {
+    try {
+        // Can load public data even without wallet
+        let readClient = client;
+        if (!readClient) {
+            readClient = createClient({ chain: studionet });
+        }
+        
+        const projects = await readClient.readContract({
+            address: CONTRACT_ADDRESS,
+            functionName: 'get_all_projects',
+            args: []
+        });
+        allProjects = projects || [];
+        filterProjects();
+    } catch (error) {
+        console.error('Projects page error:', error);
+        document.getElementById('projectsListFull').innerHTML = '<p class="empty-state">Failed to load projects. Please connect wallet and refresh.</p>';
+    }
 }
 
+function filterProjects() {
+    const search = document.getElementById('projectSearch')?.value.toLowerCase() || '';
+    const category = document.getElementById('categoryFilter')?.value || '';
+    const sort = document.getElementById('sortFilter')?.value || 'rating';
+
+    let filtered = [...allProjects].filter(project => {
+        const getVal = (key) => project instanceof Map ? project.get(key) : project[key];
+        const name = String(getVal('name') || '').toLowerCase();
+        const cat = String(getVal('category') || '');
+        
+        const matchesSearch = !search || name.includes(search);
+        const matchesCategory = !category || cat === category;
+        
+        return matchesSearch && matchesCategory;
+    });
+
+    // Sort
+    filtered.sort((a, b) => {
+        const getVal = (p, key) => Number(p instanceof Map ? p.get(key) : p[key] || 0);
+        
+        if (sort === 'rating') {
+            return getVal(b, 'reputation_score') - getVal(a, 'reputation_score');
+        } else if (sort === 'reviews') {
+            return getVal(b, 'total_reviews') - getVal(a, 'total_reviews');
+        }
+        return 0;
+    });
+
+    displayProjects(filtered, 'projectsListFull');
+}
+
+async function displayProjects(projects, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!projects || projects.length === 0) {
+        container.innerHTML = '<p class="empty-state">No projects found</p>';
+        return;
+    }
+
+    container.innerHTML = '<p class="loading-text">Loading projects...</p>';
+
+    let html = '';
+    for (const project of projects) {
+        const getVal = (key) => project instanceof Map ? project.get(key) : project[key];
+        
+        const name = getVal('name') || 'Unknown';
+        const category = getVal('category') || 'Other';
+        const score = Number(getVal('reputation_score') || 500);
+        const stars = Number(getVal('average_stars') || 30);
+        const level = getVal('reputation_level') || 'Average';
+        const reviews = Number(getVal('total_reviews') || 0);
+        const ownerAddress = getVal('owner') || '';
+        
+        const avgStars = (stars / 10).toFixed(1);
+        const starIcons = '⭐'.repeat(Math.round(stars / 10));
+        
+        // Get owner username
+        const ownerDisplay = await getUserDisplay(ownerAddress);
+        const ownerName = ownerDisplay.username || 'Anonymous';
+
+        html += `
+            <div class="project-card" onclick="navigateTo('project-detail', '${name}')">
+                <div class="project-header">
+                    <div>
+                        <div class="project-name">${name}</div>
+                        <span class="project-category">${category}</span>
+                    </div>
+                </div>
+                <div class="project-owner">
+                    <small>👤 By: <span class="owner-name" title="${ownerAddress}">${ownerName}</span></small>
+                </div>
+                <div class="project-reputation">
+                    <span class="reputation-score">${score}/1000</span>
+                    <span class="reputation-level">${level}</span>
+                </div>
+                <div class="project-stats">
+                    <span>${starIcons} ${avgStars}/5</span>
+                    <span>📝 ${reviews} reviews</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+}
+
+// Project Detail Page
+async function loadProjectDetail(projectName) {
+    currentProjectName = projectName;
+    
+    try {
+        // Can load public data even without wallet
+        let readClient = client;
+        if (!readClient) {
+            readClient = createClient({ chain: studionet });
+        }
+        
+        // Load project info
+        const project = await readClient.readContract({
+            address: CONTRACT_ADDRESS,
+            functionName: 'get_project',
+            args: [projectName]
+        });
+        const getVal = (key) => project instanceof Map ? project.get(key) : project[key];
+        
+        const name = getVal('name') || projectName;
+        const category = getVal('category') || 'Unknown';
+        const description = getVal('description') || '';
+        const website = getVal('website') || '';
+        const score = Number(getVal('reputation_score') || 500);
+        const stars = Number(getVal('average_stars') || 30);
+        const level = getVal('reputation_level') || 'Average';
+        const reviews = Number(getVal('total_reviews') || 0);
+        
+        const avgStars = (stars / 10).toFixed(1);
+        
+        document.getElementById('projectDetailContent').innerHTML = `
+            <div class="project-detail-header">
+                <h2>${name}</h2>
+                <span class="project-category">${category}</span>
+            </div>
+            <p>${description}</p>
+            <p><strong>Website:</strong> <a href="${website}" target="_blank">${website}</a></p>
+            <div class="project-reputation">
+                <div>
+                    <div class="reputation-score">${score}/1000</div>
+                    <div class="reputation-level">${level}</div>
+                </div>
+                <div>
+                    <div>⭐ ${avgStars}/5</div>
+                    <div>📝 ${reviews} reviews</div>
+                </div>
+            </div>
+        `;
+
+        // Load reviews
+        const reviewsList = await readClient.readContract({
+            address: CONTRACT_ADDRESS,
+            functionName: 'get_reviews',
+            args: [projectName, 50]
+        });
+        displayReviews(reviewsList || [], 'projectReviewsList');
+
+    } catch (error) {
+        console.error('Project detail error:', error);
+        document.getElementById('projectDetailContent').innerHTML = '<p class="empty-state">Failed to load project. Please refresh.</p>';
+    }
+}
+
+// Profile cache to avoid repeated lookups
+const profileCache = new Map();
+
+async function getUserDisplay(address) {
+    if (!address) return 'Anonymous';
+    
+    // Check cache first
+    if (profileCache.has(address)) {
+        return profileCache.get(address);
+    }
+    
+    try {
+        const profile = await callContractRead('get_profile', [address]);
+        const getVal = (key) => profile instanceof Map ? profile.get(key) : profile[key];
+        
+        const hasProfile = getVal('has_profile');
+        if (hasProfile) {
+            const username = getVal('username');
+            const avatarUrl = getVal('avatar_url');
+            const result = { username, avatarUrl, address };
+            profileCache.set(address, result);
+            return result;
+        }
+    } catch (error) {
+        console.error('Error fetching profile for', address, error);
+    }
+    
+    // Fallback: no profile found
+    const fallback = { 
+        username: shortenAddress(address), 
+        avatarUrl: null, 
+        address 
+    };
+    profileCache.set(address, fallback);
+    return fallback;
+}
+
+async function displayReviews(reviews, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!reviews || reviews.length === 0) {
+        container.innerHTML = '<p class="empty-state">No reviews yet</p>';
+        return;
+    }
+
+    container.innerHTML = '<p class="loading-text">Loading reviews...</p>';
+
+    let html = '';
+    for (const review of reviews) {
+        const getVal = (key) => review instanceof Map ? review.get(key) : review[key];
+        
+        const stars = '⭐'.repeat(Number(getVal('stars')));
+        const status = String(getVal('status') || 'approved').toLowerCase();
+        const authorAddress = String(getVal('author') || 'Anonymous');
+        
+        // Get username and avatar
+        const userDisplay = await getUserDisplay(authorAddress);
+        const username = userDisplay.username || 'Anonymous';
+        const avatarUrl = userDisplay.avatarUrl;
+        
+        // Avatar HTML
+        const avatarHtml = avatarUrl 
+            ? `<img src="${avatarUrl}" alt="${username}" class="review-avatar">`
+            : `<div class="review-avatar-placeholder">👤</div>`;
+        
+        html += `
+            <div class="review-card">
+                <div class="review-header">
+                    <div class="review-author-section">
+                        ${avatarHtml}
+                        <div>
+                            <div class="review-stars">${stars}</div>
+                            <small class="review-author" title="${authorAddress}">${username}</small>
+                        </div>
+                    </div>
+                    <span class="review-status ${status}">${status.toUpperCase()}</span>
+                </div>
+                <div class="review-text">${getVal('text')}</div>
+                <div class="review-meta">
+                    <span>👍 ${getVal('helpful_votes')} helpful</span>
+                    <span>📊 Quality: ${getVal('quality_score')}/100</span>
+                    <span>🕒 ${new Date(getVal('timestamp')).toLocaleDateString()}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+}
+
+window.reviewCurrentProject = async function() {
+    if (!currentAccount) {
+        showToast('Please connect wallet first', 'error');
+        return;
+    }
+    if (!currentProjectName) return;
+    
+    document.getElementById('reviewProjectName').value = currentProjectName;
+    document.getElementById('reviewModal').classList.add('active');
+    
+    // Check balance and update UI
+    await updateReviewModalBalance();
+}
+
+async function updateReviewModalBalance() {
+    try {
+        const dashboard = await callContractRead('get_my_dashboard', [currentAccount]);
+        const getVal = (key) => Number(dashboard instanceof Map ? dashboard.get(key) : dashboard[key] || 0);
+        const balance = getVal('balance');
+        const reviewStake = 100;
+        
+        const balanceDisplay = document.getElementById('reviewBalanceDisplay');
+        const balanceWarning = document.getElementById('reviewBalanceWarning');
+        const balanceInfo = document.getElementById('reviewBalanceInfo');
+        const submitBtn = document.getElementById('submitReviewBtn');
+        const currentBalanceSpan = document.getElementById('reviewCurrentBalance');
+        
+        balanceDisplay.textContent = balance;
+        currentBalanceSpan.textContent = balance;
+        
+        if (balance < reviewStake) {
+            // Show warning, hide info, disable button
+            balanceWarning.style.display = 'block';
+            balanceInfo.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.5';
+            submitBtn.style.cursor = 'not-allowed';
+            submitBtn.textContent = '❌ Insufficient Balance';
+        } else {
+            // Hide warning, show info, enable button
+            balanceWarning.style.display = 'none';
+            balanceInfo.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+            submitBtn.style.cursor = 'pointer';
+            submitBtn.textContent = '📝 Submit Review (100 GEN)';
+        }
+    } catch (error) {
+        console.error('Balance check error:', error);
+    }
+}
+
+// Profile Page
+async function loadProfilePage() {
+    // Hide all profile sections first
+    document.getElementById('profileNotConnected').style.display = 'none';
+    document.getElementById('profileSetup').style.display = 'none';
+    document.getElementById('profileDisplay').style.display = 'none';
+    document.getElementById('profileEdit').style.display = 'none';
+    document.getElementById('dashboardContent').style.display = 'none';
+
+    if (!client || !currentAccount) {
+        document.getElementById('profileNotConnected').style.display = 'block';
+        return;
+    }
+
+    try {
+        // Check if user has profile
+        const hasProfile = await callContractRead('has_profile', [currentAccount]);
+        
+        if (!hasProfile) {
+            // Show profile setup
+            document.getElementById('profileSetup').style.display = 'block';
+            setupProfileFormListeners();
+        } else {
+            // Load and display profile
+            await loadAndDisplayProfile();
+            // Also load dashboard and reviews
+            await loadDashboard();
+            await loadMyReviews();
+        }
+    } catch (error) {
+        console.error('Profile page error:', error);
+        
+        // Fallback: If contract doesn't have profile methods, show old dashboard
+        if (error.message.includes('running contract failed') || error.message.includes('invalid parameters')) {
+            console.log('Contract does not support profiles yet. Showing basic dashboard.');
+            showToast('⚠️ Profile features require updated contract deployment', 'warning');
+            document.getElementById('profileNotConnected').innerHTML = `
+                <h2>👤 My Profile</h2>
+                <div class="card">
+                    <p style="color: #f39c12; padding: 1rem; background: #fff3cd; border-radius: 8px; margin-bottom: 1rem;">
+                        ⚠️ <strong>Profile System Not Available</strong><br>
+                        The deployed contract needs to be updated to support user profiles.
+                    </p>
+                    <p>You can still use the basic dashboard below:</p>
+                </div>
+            `;
+            document.getElementById('profileNotConnected').style.display = 'block';
+            await loadDashboard();
+            await loadMyReviews();
+        } else {
+            showToast('Error loading profile', 'error');
+        }
+    }
+}
+
+function setupProfileFormListeners() {
+    // Username availability check
+    const usernameInput = document.getElementById('setupUsername');
+    let checkTimeout;
+    
+    usernameInput.addEventListener('input', () => {
+        clearTimeout(checkTimeout);
+        checkTimeout = setTimeout(async () => {
+            const username = usernameInput.value.trim();
+            if (username.length >= 3) {
+                try {
+                    const available = await callContractRead('username_available', [username]);
+                    const hint = document.getElementById('usernameAvailability');
+                    if (available) {
+                        hint.textContent = '✅ Username available';
+                        hint.style.color = 'green';
+                    } else {
+                        hint.textContent = '❌ Username taken';
+                        hint.style.color = 'red';
+                    }
+                } catch (error) {
+                    console.error('Username check error:', error);
+                }
+            }
+        }, 500);
+    });
+
+    // Bio character count
+    const bioInput = document.getElementById('setupBio');
+    bioInput.addEventListener('input', () => {
+        const count = bioInput.value.length;
+        document.getElementById('bioCharCount').textContent = `${count} / 500`;
+    });
+
+    // Edit bio character count
+    const editBioInput = document.getElementById('editBio');
+    if (editBioInput) {
+        editBioInput.addEventListener('input', () => {
+            const count = editBioInput.value.length;
+            document.getElementById('editBioCharCount').textContent = `${count} / 500`;
+        });
+    }
+}
+
+async function loadAndDisplayProfile() {
+    try {
+        const profile = await callContractRead('get_profile', [currentAccount]);
+        
+        const getVal = (key) => profile instanceof Map ? profile.get(key) : profile[key];
+        
+        // Display profile
+        const avatarUrl = getVal('avatar_url');
+        if (avatarUrl) {
+            document.getElementById('profileAvatar').src = avatarUrl;
+        }
+        document.getElementById('profileUsername').textContent = getVal('username') || 'Anonymous';
+        document.getElementById('profileAddress').textContent = shortenAddress(currentAccount);
+        document.getElementById('profileJoined').textContent = formatDate(getVal('joined_date'));
+        document.getElementById('profileBio').textContent = getVal('bio') || 'No bio yet';
+        
+        // Display stats
+        document.getElementById('profileTotalReviews').textContent = getVal('total_reviews') || 0;
+        document.getElementById('profileApprovedReviews').textContent = getVal('approved_reviews') || 0;
+        document.getElementById('profileHelpfulVotes').textContent = getVal('helpful_votes') || 0;
+        
+        // Display social links
+        const linksContainer = document.getElementById('profileLinksContainer');
+        const twitter = getVal('twitter');
+        const github = getVal('github');
+        const website = getVal('website');
+        
+        let linksHtml = '';
+        if (twitter) linksHtml += `<a href="https://twitter.com/${twitter.replace('@', '')}" target="_blank">🐦 Twitter: ${twitter}</a>`;
+        if (github) linksHtml += `<a href="https://github.com/${github}" target="_blank">🐙 GitHub: ${github}</a>`;
+        if (website) linksHtml += `<a href="${website}" target="_blank">🌐 Website</a>`;
+        
+        if (linksHtml) {
+            linksContainer.innerHTML = linksHtml;
+        } else {
+            linksContainer.innerHTML = '<p class="empty-state">No links added</p>';
+        }
+        
+        document.getElementById('profileDisplay').style.display = 'block';
+    } catch (error) {
+        console.error('Load profile error:', error);
+        showToast('Error loading profile', 'error');
+    }
+}
+
+function shortenAddress(address) {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'Unknown';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+        return dateStr;
+    }
+}
+
+// Profile Management Functions
+window.createProfile = async function() {
+    if (!client || !currentAccount) {
+        showToast('Please connect wallet first', 'error');
+        return;
+    }
+
+    const username = document.getElementById('setupUsername').value.trim();
+    const bio = document.getElementById('setupBio').value.trim();
+    const avatarUrl = document.getElementById('setupAvatar').value.trim();
+    const twitter = document.getElementById('setupTwitter').value.trim();
+    const github = document.getElementById('setupGithub').value.trim();
+    const website = document.getElementById('setupWebsite').value.trim();
+
+    if (!username || username.length < 3) {
+        showToast('Username must be at least 3 characters', 'error');
+        return;
+    }
+
+    try {
+        showLoading('Creating profile...');
+
+        await callContractWrite('create_profile', [
+            currentAccount,
+            username,
+            bio,
+            avatarUrl,
+            twitter,
+            github,
+            website
+        ]);
+
+        showLoading('Waiting for confirmation...');
+        await waitForStateUpdate(async () => {
+            const hasProfile = await callContractRead('has_profile', [currentAccount]);
+            return hasProfile;
+        });
+
+        hideLoading();
+        showToast('Profile created successfully! 🎉', 'success');
+        
+        // Reload profile page
+        await loadProfilePage();
+    } catch (error) {
+        hideLoading();
+        console.error('Create profile error:', error);
+        showToast('Error creating profile: ' + error.message, 'error');
+    }
+}
+
+window.showProfileEditMode = async function() {
+    try {
+        const profile = await callContractRead('get_profile', [currentAccount]);
+        const getVal = (key) => profile instanceof Map ? profile.get(key) : profile[key];
+
+        // Populate edit form
+        document.getElementById('editUsername').value = getVal('username') || '';
+        document.getElementById('editBio').value = getVal('bio') || '';
+        document.getElementById('editAvatar').value = getVal('avatar_url') || '';
+        document.getElementById('editTwitter').value = getVal('twitter') || '';
+        document.getElementById('editGithub').value = getVal('github') || '';
+        document.getElementById('editWebsite').value = getVal('website') || '';
+
+        // Update character count
+        const bioCount = (getVal('bio') || '').length;
+        document.getElementById('editBioCharCount').textContent = `${bioCount} / 500`;
+
+        // Hide display, show edit
+        document.getElementById('profileDisplay').style.display = 'none';
+        document.getElementById('profileEdit').style.display = 'block';
+    } catch (error) {
+        console.error('Show edit mode error:', error);
+        showToast('Error loading profile for editing', 'error');
+    }
+}
+
+window.updateProfile = async function() {
+    if (!client || !currentAccount) {
+        showToast('Please connect wallet first', 'error');
+        return;
+    }
+
+    const bio = document.getElementById('editBio').value.trim();
+    const avatarUrl = document.getElementById('editAvatar').value.trim();
+    const twitter = document.getElementById('editTwitter').value.trim();
+    const github = document.getElementById('editGithub').value.trim();
+    const website = document.getElementById('editWebsite').value.trim();
+
+    try {
+        showLoading('Updating profile...');
+
+        await callContractWrite('update_profile', [
+            currentAccount,
+            bio,
+            avatarUrl,
+            twitter,
+            github,
+            website
+        ]);
+
+        showLoading('Waiting for confirmation...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        hideLoading();
+        showToast('Profile updated successfully! ✅', 'success');
+        
+        // Hide edit, reload display
+        document.getElementById('profileEdit').style.display = 'none';
+        await loadAndDisplayProfile();
+        document.getElementById('dashboardContent').style.display = 'block';
+    } catch (error) {
+        hideLoading();
+        console.error('Update profile error:', error);
+        showToast('Error updating profile: ' + error.message, 'error');
+    }
+}
+
+window.cancelProfileEdit = function() {
+    document.getElementById('profileEdit').style.display = 'none';
+    document.getElementById('profileDisplay').style.display = 'block';
+}
+
+function switchProfileTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.tab === tab) btn.classList.add('active');
+    });
+
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(`tab-${tab}`).classList.add('active');
+
+    if (tab === 'transactions') {
+        loadTransactions();
+    }
+}
+
+async function loadMyReviews() {
+    if (!client || !currentAccount) return;
+
+    try {
+        const reviews = await callContractRead('get_my_reviews', [currentAccount]);
+        displayReviews(reviews || [], 'myReviewsList');
+    } catch (error) {
+        console.error('My reviews error:', error);
+    }
+}
+
+async function loadTransactions() {
+    if (!client || !currentAccount) return;
+
+    try {
+        const transactions = await callContractRead('get_my_transactions', [currentAccount, 50]);
+        
+        if (!transactions || transactions.length === 0) {
+            document.getElementById('transactionsList').innerHTML = '<p class="empty-state">No transactions yet</p>';
+            return;
+        }
+
+        let html = '';
+        for (const tx of transactions) {
+            const getVal = (key) => tx instanceof Map ? tx.get(key) : tx[key];
+            
+            const type = String(getVal('type'));
+            const isPositive = type === 'deposit' || type === 'refund';
+            const amountClass = isPositive ? 'success' : 'error';
+            const sign = isPositive ? '+' : '-';
+            
+            html += `
+                <div class="review-card">
+                    <div class="review-header">
+                        <div>
+                            <strong>${type.toUpperCase()}</strong>
+                            <p>${getVal('description')}</p>
+                        </div>
+                        <span class="stat-value ${amountClass}">${sign}${Number(getVal('amount'))}</span>
+                    </div>
+                    <small>${new Date(getVal('timestamp')).toLocaleString()}</small>
+                </div>
+            `;
+        }
+        
+        document.getElementById('transactionsList').innerHTML = html;
+    } catch (error) {
+        console.error('Transactions error:', error);
+    }
+}
+
+// Forms
 window.depositTokens = async function(event) {
     event.preventDefault();
     
@@ -250,31 +1046,23 @@ window.depositTokens = async function(event) {
 
     const amount = parseInt(document.getElementById('depositAmount').value);
     
-    console.log('Depositing:', amount, 'for account:', currentAccount);
-    
     try {
         showLoading('Depositing tokens...');
         
-        const result = await callContractWrite('deposit', [currentAccount, amount]);
-        
-        console.log('Deposit result:', result);
+        await callContractWrite('deposit', [currentAccount, amount]);
         
         closeDepositModal();
         document.getElementById('depositForm').reset();
         
-        // Wait for state to update
-        showLoading('Deposit confirmed! Waiting for blockchain update...');
-        
+        showLoading('Waiting for update...');
         const oldBalance = document.getElementById('balance').textContent;
-        
         await waitForStateUpdate(async () => {
             await loadDashboard();
-            const newBalance = document.getElementById('balance').textContent;
-            return newBalance !== oldBalance;
+            return document.getElementById('balance').textContent !== oldBalance;
         });
         
         hideLoading();
-        showToast('Deposit successful! Balance updated ✅', 'success');
+        showToast('Deposit successful!', 'success');
         
     } catch (error) {
         console.error('Deposit error:', error);
@@ -283,101 +1071,6 @@ window.depositTokens = async function(event) {
     }
 }
 
-// Project Functions
-window.loadAllProjects = async function() {
-    if (!client) {
-        document.getElementById('projectsList').innerHTML = 
-            '<p class="empty-state">Please connect wallet to view projects</p>';
-        return;
-    }
-
-    try {
-        document.getElementById('projectsList').innerHTML = 
-            '<p class="empty-state">Loading projects...</p>';
-        
-        const projects = await callContractRead('get_all_projects', []);
-        
-        console.log('Projects loaded:', projects); // Debug log
-        
-        if (!projects || projects.length === 0) {
-            document.getElementById('projectsList').innerHTML = 
-                '<p class="empty-state">No projects registered yet. Be the first to register one!</p>';
-            // Clear the dropdown too
-            document.getElementById('projectNamesList').innerHTML = '';
-            return;
-        }
-
-        let html = '';
-        let dropdownOptions = '';
-        
-        for (const project of projects) {
-            console.log('Project:', project); // Debug each project
-            
-            // Helper to get value from Map or object
-            const getVal = (key) => {
-                if (project instanceof Map) {
-                    return project.get(key);
-                }
-                return project[key];
-            };
-            
-            // Handle both possible return formats
-            const name = getVal('name') || 'Unknown';
-            const category = getVal('category') || 'Unknown';
-            const reputation_score = Number(getVal('reputation_score') || 500);
-            const average_stars = Number(getVal('average_stars') || 30);
-            const reputation_level = getVal('reputation_level') || 'Average';
-            const total_reviews = Number(getVal('total_reviews') || 0);
-            
-            const avgStars = (average_stars / 10).toFixed(1);
-            const stars = '⭐'.repeat(Math.round(average_stars / 10));
-            
-            html += `
-                <div class="project-card" onclick="viewProject('${name}')">
-                    <div class="project-header">
-                        <div>
-                            <div class="project-name">${name}</div>
-                            <span class="project-category">${category}</span>
-                        </div>
-                    </div>
-                    <div class="project-reputation">
-                        <span class="reputation-score">${reputation_score}/1000</span>
-                        <span class="reputation-level">${reputation_level}</span>
-                    </div>
-                    <div class="project-stats">
-                        <span>${stars} ${avgStars}/5</span>
-                        <span>📝 ${total_reviews} reviews</span>
-                    </div>
-                </div>
-            `;
-            
-            // Add to dropdown
-            dropdownOptions += `<option value="${name}">${name} (${category})</option>`;
-        }
-        
-        document.getElementById('projectsList').innerHTML = html;
-        
-        // Update the datalist for project name input
-        document.getElementById('projectNamesList').innerHTML = dropdownOptions;
-        
-    } catch (error) {
-        console.error('Load projects error:', error);
-        document.getElementById('projectsList').innerHTML = 
-            '<p class="empty-state">Failed to load projects</p>';
-    }
-}
-
-window.viewProject = async function(projectName) {
-    // Switch to submit review tab and prefill project name (exact case)
-    switchTab('submit');
-    document.getElementById('reviewProjectName').value = projectName;
-    // Focus on the rating to make it easier to continue
-    setTimeout(() => {
-        document.querySelector('input[name="rating"]')?.focus();
-    }, 100);
-}
-
-// Register Project
 window.registerProject = async function(event) {
     event.preventDefault();
     
@@ -394,28 +1087,22 @@ window.registerProject = async function(event) {
     try {
         showLoading('Registering project...');
         
-        const result = await callContractWrite('register_project', [
-            currentAccount,
-            name,
-            category,
-            description,
-            website
-        ]);
+        await callContractWrite('register_project', [currentAccount, name, category, description, website]);
         
         document.getElementById('registerForm').reset();
         
-        // Wait for state to update
-        showLoading('Project registered! Waiting for blockchain update...');
-        
+        showLoading('Waiting for update...');
         await waitForStateUpdate(async () => {
-            await loadAllProjects();
-            const projectsList = document.getElementById('projectsList').innerHTML;
-            return projectsList.includes(name);
+            await loadProjectsPage();
+            return allProjects.some(p => {
+                const pName = p instanceof Map ? p.get('name') : p.name;
+                return pName === name;
+            });
         });
         
         hideLoading();
-        showToast('Project registered successfully! ✅', 'success');
-        switchTab('browse');
+        showToast('Project registered!', 'success');
+        navigateTo('projects');
         
     } catch (error) {
         console.error('Register error:', error);
@@ -424,7 +1111,6 @@ window.registerProject = async function(event) {
     }
 }
 
-// Submit Review
 window.submitReview = async function(event) {
     event.preventDefault();
     
@@ -433,244 +1119,72 @@ window.submitReview = async function(event) {
         return;
     }
 
-    const projectName = document.getElementById('reviewProjectName').value.trim();
+    const projectName = document.getElementById('reviewProjectName').value;
     const rating = document.querySelector('input[name="rating"]:checked');
     
     if (!rating) {
-        showToast('Please select a star rating', 'error');
+        showToast('Please select a rating', 'error');
         return;
     }
     
     const text = document.getElementById('reviewText').value;
 
-    console.log('Submitting review:', {projectName, rating: rating.value, text});
-
     try {
+        // First check balance
+        showLoading('Checking balance...');
+        const dashboard = await callContractRead('get_my_dashboard', [currentAccount]);
+        const getVal = (key) => Number(dashboard instanceof Map ? dashboard.get(key) : dashboard[key] || 0);
+        const balance = getVal('balance');
+        const reviewStake = 100; // 100 GEN per review
+        
+        if (balance < reviewStake) {
+            hideLoading();
+            showToast(`Insufficient balance! You need ${reviewStake} GEN to submit a review. Current balance: ${balance} GEN`, 'error');
+            
+            // Show deposit prompt
+            if (confirm(`You need ${reviewStake - balance} more GEN to submit a review. Would you like to deposit now?`)) {
+                closeReviewModal();
+                openDepositModal();
+            }
+            return;
+        }
+        
         showLoading('Checking project...');
         
-        // Check if project exists first
-        const projectExists = await callContractRead('project_exists', [projectName]);
-        console.log('Project exists check:', projectName, '=', projectExists);
-        
-        if (!projectExists) {
+        const exists = await callContractRead('project_exists', [projectName]);
+        if (!exists) {
             hideLoading();
-            showToast(`Project "${projectName}" not found. Please check the spelling (case-sensitive).`, 'error');
+            showToast(`Project "${projectName}" not found`, 'error');
             return;
         }
         
         showLoading('Submitting review...');
         
-        const result = await callContractWrite('submit_review', [
-            currentAccount,
-            projectName,
-            parseInt(rating.value),
-            text
-        ]);
+        await callContractWrite('submit_review', [currentAccount, projectName, parseInt(rating.value), text]);
         
-        console.log('Review submit result:', result);
-        
+        closeReviewModal();
         document.getElementById('reviewForm').reset();
         
-        // Wait for state to update
-        showLoading('Review submitted! Waiting for blockchain update...');
-        
-        const oldReviewCount = document.getElementById('totalReviews').textContent;
-        
+        showLoading('Waiting for update...');
+        const oldCount = document.getElementById('totalReviews').textContent;
         await waitForStateUpdate(async () => {
             await loadDashboard();
             await loadMyReviews();
-            const newReviewCount = document.getElementById('totalReviews').textContent;
-            return newReviewCount !== oldReviewCount;
+            return document.getElementById('totalReviews').textContent !== oldCount;
         });
         
         hideLoading();
-        showToast('Review submitted successfully! Data updated ✅', 'success');
-        switchTab('myReviews');
+        showToast('Review submitted!', 'success');
+        navigateTo('profile');
         
     } catch (error) {
-        console.error('Submit review error:', error);
-        showToast(`Review submission failed: ${error.message}`, 'error');
+        console.error('Review error:', error);
+        showToast(`Submission failed: ${error.message}`, 'error');
         hideLoading();
     }
 }
 
-// My Reviews
-window.loadMyReviews = async function() {
-    if (!client || !currentAccount) {
-        document.getElementById('myReviewsList').innerHTML = 
-            '<p class="empty-state">Please connect wallet to view your reviews</p>';
-        return;
-    }
-
-    try {
-        document.getElementById('myReviewsList').innerHTML = 
-            '<p class="empty-state">Loading your reviews...</p>';
-        
-        const reviews = await callContractRead('get_my_reviews', [currentAccount]);
-        
-        console.log('My reviews loaded:', reviews);
-        
-        if (!reviews || reviews.length === 0) {
-            document.getElementById('myReviewsList').innerHTML = 
-                '<p class="empty-state">You haven\'t submitted any reviews yet</p>';
-            return;
-        }
-
-        let html = '';
-        for (const review of reviews) {
-            // Helper to get value from Map or object
-            const getVal = (key) => {
-                if (review instanceof Map) {
-                    return review.get(key);
-                }
-                return review[key];
-            };
-            
-            const stars = '⭐'.repeat(Number(getVal('stars')));
-            const statusClass = String(getVal('status')).toLowerCase();
-            
-            html += `
-                <div class="review-card">
-                    <div class="review-header">
-                        <div>
-                            <div class="review-project">${getVal('project')}</div>
-                            <div class="review-stars">${stars}</div>
-                        </div>
-                        <span class="review-status ${statusClass}">${String(getVal('status')).toUpperCase()}</span>
-                    </div>
-                    <div class="review-text">${getVal('text')}</div>
-                    <div class="review-feedback">
-                        📊 Quality Score: ${getVal('quality_score')}/100<br>
-                        ${getVal('feedback')}
-                    </div>
-                    <div class="review-meta">
-                        <span>👍 ${getVal('helpful_votes')} helpful</span>
-                        <span>💰 Stake: ${getVal('stake')} GEN</span>
-                        <span>🕒 ${new Date(getVal('timestamp')).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            `;
-        }
-        
-        document.getElementById('myReviewsList').innerHTML = html;
-        
-    } catch (error) {
-        console.error('Load reviews error:', error);
-        document.getElementById('myReviewsList').innerHTML = 
-            '<p class="empty-state">Failed to load your reviews</p>';
-    }
-}
-
-// Transactions
-window.loadTransactions = async function() {
-    if (!client || !currentAccount) {
-        document.getElementById('transactionsList').innerHTML = 
-            '<p class="empty-state">Please connect wallet to view transactions</p>';
-        return;
-    }
-
-    try {
-        document.getElementById('transactionsList').innerHTML = 
-            '<p class="empty-state">Loading transactions...</p>';
-        
-        const transactions = await callContractRead('get_my_transactions', [currentAccount, 50]);
-        
-        if (!transactions || transactions.length === 0) {
-            document.getElementById('transactionsList').innerHTML = 
-                '<p class="empty-state">No transactions yet</p>';
-            return;
-        }
-
-        let html = '';
-        for (const tx of transactions) {
-            // Helper to get value from Map or object
-            const getVal = (key) => {
-                if (tx instanceof Map) {
-                    return tx.get(key);
-                }
-                return tx[key];
-            };
-            
-            const txType = String(getVal('type'));
-            const isPositive = txType === 'deposit' || txType === 'refund';
-            const amountClass = isPositive ? 'positive' : 'negative';
-            const sign = isPositive ? '+' : '-';
-            
-            html += `
-                <div class="transaction-card">
-                    <div class="transaction-info">
-                        <div class="transaction-type">${txType.toUpperCase()}</div>
-                        <div class="transaction-description">${getVal('description')}</div>
-                        <div class="transaction-time">${new Date(getVal('timestamp')).toLocaleString()}</div>
-                    </div>
-                    <div class="transaction-amount ${amountClass}">
-                        ${sign}${Number(getVal('amount'))} GEN
-                    </div>
-                </div>
-            `;
-        }
-        
-        document.getElementById('transactionsList').innerHTML = html;
-        
-    } catch (error) {
-        console.error('Load transactions error:', error);
-        document.getElementById('transactionsList').innerHTML = 
-            '<p class="empty-state">Failed to load transactions</p>';
-    }
-}
-
-// Tab Navigation
-function switchTab(tabName) {
-    // Update buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.tab === tabName) {
-            btn.classList.add('active');
-        }
-    });
-
-    // Update content
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    document.getElementById(`${tabName}Tab`).classList.add('active');
-
-    // Load data for specific tabs
-    if (tabName === 'myReviews') {
-        loadMyReviews();
-    } else if (tabName === 'transactions') {
-        loadTransactions();
-    }
-}
-
-// Modal Functions
-window.closeNetworkModal = function() {
-    document.getElementById('networkModal').classList.remove('active');
-}
-
-// UI Helper Functions
-function showLoading(text = 'Processing...') {
-    document.getElementById('loadingText').textContent = text;
-    document.getElementById('loadingOverlay').style.display = 'flex';
-}
-
-function hideLoading() {
-    document.getElementById('loadingOverlay').style.display = 'none';
-}
-
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    
-    document.getElementById('toastContainer').appendChild(toast);
-    
-    setTimeout(() => {
-        toast.remove();
-    }, 5000);
-}
-
-// Contract Interaction Helpers
+// Contract Helpers
 async function callContractRead(method, args) {
     try {
         const result = await client.readContract({
@@ -699,13 +1213,12 @@ async function callContractWrite(method, args) {
     }
 }
 
-// Helper to wait for blockchain state to update after a write
 async function waitForStateUpdate(checkFunction, maxAttempts = 10, delayMs = 500) {
     for (let i = 0; i < maxAttempts; i++) {
         try {
             const result = await checkFunction();
             if (result) {
-                console.log(`State updated after ${i + 1} attempts`);
+                console.log(`Updated after ${i + 1} attempts`);
                 return true;
             }
         } catch (error) {
@@ -714,20 +1227,63 @@ async function waitForStateUpdate(checkFunction, maxAttempts = 10, delayMs = 500
         
         if (i < maxAttempts - 1) {
             await new Promise(resolve => setTimeout(resolve, delayMs));
-            // Exponential backoff
             delayMs = Math.min(delayMs * 1.5, 3000);
         }
     }
-    console.log('Max attempts reached, proceeding anyway');
     return false;
 }
 
-// Export for debugging
+// UI Helpers
+function showLoading(text = 'Processing...') {
+    document.getElementById('loadingText').textContent = text;
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    
+    document.getElementById('toastContainer').appendChild(toast);
+    
+    setTimeout(() => toast.remove(), 5000);
+}
+
+// Modal Functions
+window.showDepositModal = function() {
+    document.getElementById('depositModal').classList.add('active');
+}
+
+window.closeDepositModal = function() {
+    document.getElementById('depositModal').classList.remove('active');
+}
+
+window.setDepositAmount = function(amount) {
+    document.getElementById('depositAmount').value = amount;
+}
+
+window.closeReviewModal = function() {
+    document.getElementById('reviewModal').classList.remove('active');
+}
+
+window.closeNetworkModal = function() {
+    document.getElementById('networkModal').classList.remove('active');
+}
+
+function updateContractAddress() {
+    document.getElementById('footerContractAddress').textContent = CONTRACT_ADDRESS;
+}
+
+// Debug
 window.debugApp = {
     client,
     currentAccount,
-    loadDashboard,
-    loadAllProjects,
-    callContractRead,
-    callContractWrite
+    currentPage,
+    allProjects,
+    navigateTo,
+    loadDashboard
 };
