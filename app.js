@@ -19,6 +19,7 @@ let currentAccount = null;
 let currentPage = 'home';
 let currentProjectName = null;
 let allProjects = [];
+let isNavigating = false; // Prevents hashchange re-entry loop
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -68,17 +69,19 @@ function setupEventListeners() {
 
 // Routing System
 function setupRouting() {
-    // Handle hash changes
     window.addEventListener('hashchange', handleRouteChange);
     handleRouteChange();
 }
 
 function handleRouteChange() {
+    // If navigateTo is already running, ignore this event — it was triggered by us
+    if (isNavigating) return;
+
     const hash = window.location.hash.slice(1) || 'home';
     const [page, ...params] = hash.split('/');
-    
+
     if (page === 'project' && params[0]) {
-        // FIX 1: Decode the project name from the URL before using it
+        // Always decode before passing to navigateTo
         navigateTo('project-detail', decodeURIComponent(params[0]));
     } else {
         navigateTo(page);
@@ -86,9 +89,12 @@ function handleRouteChange() {
 }
 
 function navigateTo(page, param = null) {
+    // Lock to prevent the URL update below from firing hashchange again
+    isNavigating = true;
+
     // Hide all pages
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    
+
     // Update nav links
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
@@ -96,23 +102,26 @@ function navigateTo(page, param = null) {
             link.classList.add('active');
         }
     });
-    
+
     // Show target page
     const targetPage = document.getElementById(`page-${page}`);
     if (targetPage) {
         targetPage.classList.add('active');
         currentPage = page;
-        
-        // Load page-specific data
+
+        // Load page-specific data — param is always the clean decoded string here
         loadPageData(page, param);
-        
-        // FIX 2: Encode the project name when writing it to the URL hash
+
+        // Update URL silently — history.replaceState does NOT fire hashchange
         if (page === 'project-detail' && param) {
-            window.location.hash = `project/${encodeURIComponent(param)}`;
+            history.replaceState(null, '', `#project/${encodeURIComponent(param)}`);
         } else {
-            window.location.hash = page;
+            history.replaceState(null, '', `#${page}`);
         }
     }
+
+    // Release lock after current call stack clears
+    setTimeout(() => { isNavigating = false; }, 0);
 }
 
 window.navigateTo = navigateTo;
@@ -149,19 +158,15 @@ async function connectWallet() {
 
         currentAccount = accounts[0];
 
-        // Check network
         const chainId = await window.ethereum.request({ method: 'eth_chainId' });
         if (chainId !== GENLAYER_NETWORK.chainId) {
             await switchToGenLayer();
         }
 
-        // Initialize client
         client = createClient({ chain: studionet, account: currentAccount });
 
         updateWalletUI();
         await loadDashboard();
-        
-        // Reload current page data
         loadPageData(currentPage);
 
         showToast('Wallet connected!', 'success');
@@ -231,7 +236,7 @@ function updateWalletUI() {
     if (currentAccount) {
         connectBtn.style.display = 'none';
         walletInfo.style.display = 'flex';
-        document.getElementById('walletAddress').textContent = 
+        document.getElementById('walletAddress').textContent =
             `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}`;
     } else {
         connectBtn.style.display = 'block';
@@ -272,7 +277,6 @@ async function loadDashboard() {
         document.getElementById('totalSlashed').textContent = getVal('total_slashed');
         document.getElementById('netEarnings').textContent = getVal('net_earnings');
 
-        // Show dashboard content (only if on profile page)
         const dashboardEl = document.getElementById('dashboardContent');
         if (dashboardEl) {
             dashboardEl.style.display = 'block';
@@ -285,33 +289,29 @@ async function loadDashboard() {
 
 // Home Page
 async function loadHomePage() {
-    // Can load public data even without wallet
     try {
-        // If no client, create a temporary read-only one
         let readClient = client;
         if (!readClient) {
             readClient = createClient({ chain: studionet });
         }
-        
-        // Load stats
+
         const stats = await readClient.readContract({
             address: CONTRACT_ADDRESS,
             functionName: 'get_stats',
             args: []
         });
         const getVal = (key) => Number(stats instanceof Map ? stats.get(key) : stats[key] || 0);
-        
+
         document.getElementById('totalProjectsHome').textContent = getVal('total_projects');
         document.getElementById('totalReviewsHome').textContent = getVal('total_reviews');
 
-        // Load top projects
         const projects = await readClient.readContract({
             address: CONTRACT_ADDRESS,
             functionName: 'get_all_projects',
             args: []
         });
         allProjects = projects || [];
-        
+
         const topProjects = [...allProjects]
             .sort((a, b) => {
                 const scoreA = Number(a instanceof Map ? a.get('reputation_score') : a.reputation_score || 0);
@@ -321,8 +321,6 @@ async function loadHomePage() {
             .slice(0, 6);
 
         displayProjects(topProjects, 'topProjectsList');
-
-        // Load recent reviews from all projects
         await loadRecentReviews(readClient);
 
     } catch (error) {
@@ -333,27 +331,25 @@ async function loadHomePage() {
 
 async function loadRecentReviews(readClient) {
     try {
-        // Get reviews from all projects
         let allReviews = [];
-        
-        for (const project of allProjects.slice(0, 5)) { // Only check first 5 projects for performance
+
+        for (const project of allProjects.slice(0, 5)) {
             const getVal = (key) => project instanceof Map ? project.get(key) : project[key];
             const projectName = getVal('name');
-            
+
             if (projectName) {
                 const reviews = await readClient.readContract({
                     address: CONTRACT_ADDRESS,
                     functionName: 'get_reviews',
                     args: [projectName, 5]
                 });
-                
+
                 if (reviews && reviews.length > 0) {
                     allReviews = allReviews.concat(reviews);
                 }
             }
         }
-        
-        // Sort by timestamp (most recent first) and take top 5
+
         const recentReviews = allReviews
             .sort((a, b) => {
                 const timeA = a instanceof Map ? a.get('timestamp') : a.timestamp;
@@ -361,13 +357,13 @@ async function loadRecentReviews(readClient) {
                 return new Date(timeB) - new Date(timeA);
             })
             .slice(0, 5);
-        
+
         if (recentReviews.length === 0) {
             document.getElementById('recentReviewsList').innerHTML = '<p class="empty-state">No reviews yet. Be the first to review a project!</p>';
         } else {
             displayReviews(recentReviews, 'recentReviewsList');
         }
-        
+
     } catch (error) {
         console.error('Recent reviews error:', error);
         document.getElementById('recentReviewsList').innerHTML = '<p class="empty-state">Failed to load recent reviews</p>';
@@ -377,12 +373,11 @@ async function loadRecentReviews(readClient) {
 // Projects Page
 async function loadProjectsPage() {
     try {
-        // Can load public data even without wallet
         let readClient = client;
         if (!readClient) {
             readClient = createClient({ chain: studionet });
         }
-        
+
         const projects = await readClient.readContract({
             address: CONTRACT_ADDRESS,
             functionName: 'get_all_projects',
@@ -405,17 +400,16 @@ function filterProjects() {
         const getVal = (key) => project instanceof Map ? project.get(key) : project[key];
         const name = String(getVal('name') || '').toLowerCase();
         const cat = String(getVal('category') || '');
-        
+
         const matchesSearch = !search || name.includes(search);
         const matchesCategory = !category || cat === category;
-        
+
         return matchesSearch && matchesCategory;
     });
 
-    // Sort
     filtered.sort((a, b) => {
         const getVal = (p, key) => Number(p instanceof Map ? p.get(key) : p[key] || 0);
-        
+
         if (sort === 'rating') {
             return getVal(b, 'reputation_score') - getVal(a, 'reputation_score');
         } else if (sort === 'reviews') {
@@ -441,7 +435,7 @@ async function displayProjects(projects, containerId) {
     let html = '';
     for (const project of projects) {
         const getVal = (key) => project instanceof Map ? project.get(key) : project[key];
-        
+
         const name = getVal('name') || 'Unknown';
         const category = getVal('category') || 'Other';
         const score = Number(getVal('reputation_score') || 500);
@@ -449,17 +443,19 @@ async function displayProjects(projects, containerId) {
         const level = getVal('reputation_level') || 'Average';
         const reviews = Number(getVal('total_reviews') || 0);
         const ownerAddress = getVal('owner') || '';
-        
+
         const avgStars = (stars / 10).toFixed(1);
         const starIcons = '⭐'.repeat(Math.round(stars / 10));
-        
-        // Get owner username
+
         const ownerDisplay = await getUserDisplay(ownerAddress);
         const ownerName = ownerDisplay.username || 'Anonymous';
 
-        // FIX 3: Encode the project name in the onclick handler so spaces don't break routing
+        // Pass raw name — navigateTo receives the clean string directly (no URL decoding needed)
+        // Escape single quotes in name to avoid breaking the onclick attribute
+        const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
         html += `
-            <div class="project-card" onclick="navigateTo('project-detail', '${encodeURIComponent(name)}')">
+            <div class="project-card" onclick="navigateTo('project-detail', '${safeName}')">
                 <div class="project-header">
                     <div>
                         <div class="project-name">${name}</div>
@@ -480,29 +476,28 @@ async function displayProjects(projects, containerId) {
             </div>
         `;
     }
-    
+
     container.innerHTML = html;
 }
 
 // Project Detail Page
 async function loadProjectDetail(projectName) {
+    // projectName is always the clean decoded string by the time it arrives here
     currentProjectName = projectName;
-    
+
     try {
-        // Can load public data even without wallet
         let readClient = client;
         if (!readClient) {
             readClient = createClient({ chain: studionet });
         }
-        
-        // Load project info
+
         const project = await readClient.readContract({
             address: CONTRACT_ADDRESS,
             functionName: 'get_project',
             args: [projectName]
         });
         const getVal = (key) => project instanceof Map ? project.get(key) : project[key];
-        
+
         const name = getVal('name') || projectName;
         const category = getVal('category') || 'Unknown';
         const description = getVal('description') || '';
@@ -511,9 +506,9 @@ async function loadProjectDetail(projectName) {
         const stars = Number(getVal('average_stars') || 30);
         const level = getVal('reputation_level') || 'Average';
         const reviews = Number(getVal('total_reviews') || 0);
-        
+
         const avgStars = (stars / 10).toFixed(1);
-        
+
         document.getElementById('projectDetailContent').innerHTML = `
             <div class="project-detail-header">
                 <h2>${name}</h2>
@@ -533,7 +528,6 @@ async function loadProjectDetail(projectName) {
             </div>
         `;
 
-        // Load reviews
         const reviewsList = await readClient.readContract({
             address: CONTRACT_ADDRESS,
             functionName: 'get_reviews',
@@ -552,16 +546,15 @@ const profileCache = new Map();
 
 async function getUserDisplay(address) {
     if (!address) return 'Anonymous';
-    
-    // Check cache first
+
     if (profileCache.has(address)) {
         return profileCache.get(address);
     }
-    
+
     try {
         const profile = await callContractRead('get_profile', [address]);
         const getVal = (key) => profile instanceof Map ? profile.get(key) : profile[key];
-        
+
         const hasProfile = getVal('has_profile');
         if (hasProfile) {
             const username = getVal('username');
@@ -573,12 +566,11 @@ async function getUserDisplay(address) {
     } catch (error) {
         console.error('Error fetching profile for', address, error);
     }
-    
-    // Fallback: no profile found
-    const fallback = { 
-        username: shortenAddress(address), 
-        avatarUrl: null, 
-        address 
+
+    const fallback = {
+        username: shortenAddress(address),
+        avatarUrl: null,
+        address
     };
     profileCache.set(address, fallback);
     return fallback;
@@ -598,21 +590,19 @@ async function displayReviews(reviews, containerId) {
     let html = '';
     for (const review of reviews) {
         const getVal = (key) => review instanceof Map ? review.get(key) : review[key];
-        
+
         const stars = '⭐'.repeat(Number(getVal('stars')));
         const status = String(getVal('status') || 'approved').toLowerCase();
         const authorAddress = String(getVal('author') || 'Anonymous');
-        
-        // Get username and avatar
+
         const userDisplay = await getUserDisplay(authorAddress);
         const username = userDisplay.username || 'Anonymous';
         const avatarUrl = userDisplay.avatarUrl;
-        
-        // Avatar HTML
-        const avatarHtml = avatarUrl 
+
+        const avatarHtml = avatarUrl
             ? `<img src="${avatarUrl}" alt="${username}" class="review-avatar">`
             : `<div class="review-avatar-placeholder">👤</div>`;
-        
+
         html += `
             <div class="review-card">
                 <div class="review-header">
@@ -634,7 +624,7 @@ async function displayReviews(reviews, containerId) {
             </div>
         `;
     }
-    
+
     container.innerHTML = html;
 }
 
@@ -644,11 +634,10 @@ window.reviewCurrentProject = async function() {
         return;
     }
     if (!currentProjectName) return;
-    
+
     document.getElementById('reviewProjectName').value = currentProjectName;
     document.getElementById('reviewModal').classList.add('active');
-    
-    // Check balance and update UI
+
     await updateReviewModalBalance();
 }
 
@@ -658,18 +647,17 @@ async function updateReviewModalBalance() {
         const getVal = (key) => Number(dashboard instanceof Map ? dashboard.get(key) : dashboard[key] || 0);
         const balance = getVal('balance');
         const reviewStake = 100;
-        
+
         const balanceDisplay = document.getElementById('reviewBalanceDisplay');
         const balanceWarning = document.getElementById('reviewBalanceWarning');
         const balanceInfo = document.getElementById('reviewBalanceInfo');
         const submitBtn = document.getElementById('submitReviewBtn');
         const currentBalanceSpan = document.getElementById('reviewCurrentBalance');
-        
+
         balanceDisplay.textContent = balance;
         currentBalanceSpan.textContent = balance;
-        
+
         if (balance < reviewStake) {
-            // Show warning, hide info, disable button
             balanceWarning.style.display = 'block';
             balanceInfo.style.display = 'none';
             submitBtn.disabled = true;
@@ -677,7 +665,6 @@ async function updateReviewModalBalance() {
             submitBtn.style.cursor = 'not-allowed';
             submitBtn.textContent = '❌ Insufficient Balance';
         } else {
-            // Hide warning, show info, enable button
             balanceWarning.style.display = 'none';
             balanceInfo.style.display = 'block';
             submitBtn.disabled = false;
@@ -692,7 +679,6 @@ async function updateReviewModalBalance() {
 
 // Profile Page
 async function loadProfilePage() {
-    // Hide all profile sections first
     document.getElementById('profileNotConnected').style.display = 'none';
     document.getElementById('profileSetup').style.display = 'none';
     document.getElementById('profileDisplay').style.display = 'none';
@@ -705,24 +691,19 @@ async function loadProfilePage() {
     }
 
     try {
-        // Check if user has profile
         const hasProfile = await callContractRead('has_profile', [currentAccount]);
-        
+
         if (!hasProfile) {
-            // Show profile setup
             document.getElementById('profileSetup').style.display = 'block';
             setupProfileFormListeners();
         } else {
-            // Load and display profile
             await loadAndDisplayProfile();
-            // Also load dashboard and reviews
             await loadDashboard();
             await loadMyReviews();
         }
     } catch (error) {
         console.error('Profile page error:', error);
-        
-        // Fallback: If contract doesn't have profile methods, show old dashboard
+
         if (error.message.includes('running contract failed') || error.message.includes('invalid parameters')) {
             console.log('Contract does not support profiles yet. Showing basic dashboard.');
             showToast('⚠️ Profile features require updated contract deployment', 'warning');
@@ -746,10 +727,9 @@ async function loadProfilePage() {
 }
 
 function setupProfileFormListeners() {
-    // Username availability check
     const usernameInput = document.getElementById('setupUsername');
     let checkTimeout;
-    
+
     usernameInput.addEventListener('input', () => {
         clearTimeout(checkTimeout);
         checkTimeout = setTimeout(async () => {
@@ -772,14 +752,12 @@ function setupProfileFormListeners() {
         }, 500);
     });
 
-    // Bio character count
     const bioInput = document.getElementById('setupBio');
     bioInput.addEventListener('input', () => {
         const count = bioInput.value.length;
         document.getElementById('bioCharCount').textContent = `${count} / 500`;
     });
 
-    // Edit bio character count
     const editBioInput = document.getElementById('editBio');
     if (editBioInput) {
         editBioInput.addEventListener('input', () => {
@@ -792,10 +770,8 @@ function setupProfileFormListeners() {
 async function loadAndDisplayProfile() {
     try {
         const profile = await callContractRead('get_profile', [currentAccount]);
-        
         const getVal = (key) => profile instanceof Map ? profile.get(key) : profile[key];
-        
-        // Display profile
+
         const avatarUrl = getVal('avatar_url');
         if (avatarUrl) {
             document.getElementById('profileAvatar').src = avatarUrl;
@@ -804,29 +780,23 @@ async function loadAndDisplayProfile() {
         document.getElementById('profileAddress').textContent = shortenAddress(currentAccount);
         document.getElementById('profileJoined').textContent = formatDate(getVal('joined_date'));
         document.getElementById('profileBio').textContent = getVal('bio') || 'No bio yet';
-        
-        // Display stats
+
         document.getElementById('profileTotalReviews').textContent = getVal('total_reviews') || 0;
         document.getElementById('profileApprovedReviews').textContent = getVal('approved_reviews') || 0;
         document.getElementById('profileHelpfulVotes').textContent = getVal('helpful_votes') || 0;
-        
-        // Display social links
+
         const linksContainer = document.getElementById('profileLinksContainer');
         const twitter = getVal('twitter');
         const github = getVal('github');
         const website = getVal('website');
-        
+
         let linksHtml = '';
         if (twitter) linksHtml += `<a href="https://twitter.com/${twitter.replace('@', '')}" target="_blank">🐦 Twitter: ${twitter}</a>`;
         if (github) linksHtml += `<a href="https://github.com/${github}" target="_blank">🐙 GitHub: ${github}</a>`;
         if (website) linksHtml += `<a href="${website}" target="_blank">🌐 Website</a>`;
-        
-        if (linksHtml) {
-            linksContainer.innerHTML = linksHtml;
-        } else {
-            linksContainer.innerHTML = '<p class="empty-state">No links added</p>';
-        }
-        
+
+        linksContainer.innerHTML = linksHtml || '<p class="empty-state">No links added</p>';
+
         document.getElementById('profileDisplay').style.display = 'block';
     } catch (error) {
         console.error('Load profile error:', error);
@@ -871,13 +841,7 @@ window.createProfile = async function() {
         showLoading('Creating profile...');
 
         await callContractWrite('create_profile', [
-            currentAccount,
-            username,
-            bio,
-            avatarUrl,
-            twitter,
-            github,
-            website
+            currentAccount, username, bio, avatarUrl, twitter, github, website
         ]);
 
         showLoading('Waiting for confirmation...');
@@ -888,8 +852,6 @@ window.createProfile = async function() {
 
         hideLoading();
         showToast('Profile created successfully! 🎉', 'success');
-        
-        // Reload profile page
         await loadProfilePage();
     } catch (error) {
         hideLoading();
@@ -903,7 +865,6 @@ window.showProfileEditMode = async function() {
         const profile = await callContractRead('get_profile', [currentAccount]);
         const getVal = (key) => profile instanceof Map ? profile.get(key) : profile[key];
 
-        // Populate edit form
         document.getElementById('editUsername').value = getVal('username') || '';
         document.getElementById('editBio').value = getVal('bio') || '';
         document.getElementById('editAvatar').value = getVal('avatar_url') || '';
@@ -911,11 +872,9 @@ window.showProfileEditMode = async function() {
         document.getElementById('editGithub').value = getVal('github') || '';
         document.getElementById('editWebsite').value = getVal('website') || '';
 
-        // Update character count
         const bioCount = (getVal('bio') || '').length;
         document.getElementById('editBioCharCount').textContent = `${bioCount} / 500`;
 
-        // Hide display, show edit
         document.getElementById('profileDisplay').style.display = 'none';
         document.getElementById('profileEdit').style.display = 'block';
     } catch (error) {
@@ -940,12 +899,7 @@ window.updateProfile = async function() {
         showLoading('Updating profile...');
 
         await callContractWrite('update_profile', [
-            currentAccount,
-            bio,
-            avatarUrl,
-            twitter,
-            github,
-            website
+            currentAccount, bio, avatarUrl, twitter, github, website
         ]);
 
         showLoading('Waiting for confirmation...');
@@ -953,8 +907,7 @@ window.updateProfile = async function() {
 
         hideLoading();
         showToast('Profile updated successfully! ✅', 'success');
-        
-        // Hide edit, reload display
+
         document.getElementById('profileEdit').style.display = 'none';
         await loadAndDisplayProfile();
         document.getElementById('dashboardContent').style.display = 'block';
@@ -1002,7 +955,7 @@ async function loadTransactions() {
 
     try {
         const transactions = await callContractRead('get_my_transactions', [currentAccount, 50]);
-        
+
         if (!transactions || transactions.length === 0) {
             document.getElementById('transactionsList').innerHTML = '<p class="empty-state">No transactions yet</p>';
             return;
@@ -1011,12 +964,12 @@ async function loadTransactions() {
         let html = '';
         for (const tx of transactions) {
             const getVal = (key) => tx instanceof Map ? tx.get(key) : tx[key];
-            
+
             const type = String(getVal('type'));
             const isPositive = type === 'deposit' || type === 'refund';
             const amountClass = isPositive ? 'success' : 'error';
             const sign = isPositive ? '+' : '-';
-            
+
             html += `
                 <div class="review-card">
                     <div class="review-header">
@@ -1030,7 +983,7 @@ async function loadTransactions() {
                 </div>
             `;
         }
-        
+
         document.getElementById('transactionsList').innerHTML = html;
     } catch (error) {
         console.error('Transactions error:', error);
@@ -1040,32 +993,32 @@ async function loadTransactions() {
 // Forms
 window.depositTokens = async function(event) {
     event.preventDefault();
-    
+
     if (!client || !currentAccount) {
         showToast('Please connect wallet first', 'error');
         return;
     }
 
     const amount = parseInt(document.getElementById('depositAmount').value);
-    
+
     try {
         showLoading('Depositing tokens...');
-        
+
         await callContractWrite('deposit', [currentAccount, amount]);
-        
+
         closeDepositModal();
         document.getElementById('depositForm').reset();
-        
+
         showLoading('Waiting for update...');
         const oldBalance = document.getElementById('balance').textContent;
         await waitForStateUpdate(async () => {
             await loadDashboard();
             return document.getElementById('balance').textContent !== oldBalance;
         });
-        
+
         hideLoading();
         showToast('Deposit successful!', 'success');
-        
+
     } catch (error) {
         console.error('Deposit error:', error);
         showToast(`Deposit failed: ${error.message}`, 'error');
@@ -1075,7 +1028,7 @@ window.depositTokens = async function(event) {
 
 window.registerProject = async function(event) {
     event.preventDefault();
-    
+
     if (!client || !currentAccount) {
         showToast('Please connect wallet first', 'error');
         return;
@@ -1088,11 +1041,11 @@ window.registerProject = async function(event) {
 
     try {
         showLoading('Registering project...');
-        
+
         await callContractWrite('register_project', [currentAccount, name, category, description, website]);
-        
+
         document.getElementById('registerForm').reset();
-        
+
         showLoading('Waiting for update...');
         await waitForStateUpdate(async () => {
             await loadProjectsPage();
@@ -1101,11 +1054,11 @@ window.registerProject = async function(event) {
                 return pName === name;
             });
         });
-        
+
         hideLoading();
         showToast('Project registered!', 'success');
         navigateTo('projects');
-        
+
     } catch (error) {
         console.error('Register error:', error);
         showToast(`Registration failed: ${error.message}`, 'error');
@@ -1115,7 +1068,7 @@ window.registerProject = async function(event) {
 
 window.submitReview = async function(event) {
     event.preventDefault();
-    
+
     if (!client || !currentAccount) {
         showToast('Please connect wallet first', 'error');
         return;
@@ -1123,50 +1076,48 @@ window.submitReview = async function(event) {
 
     const projectName = document.getElementById('reviewProjectName').value;
     const rating = document.querySelector('input[name="rating"]:checked');
-    
+
     if (!rating) {
         showToast('Please select a rating', 'error');
         return;
     }
-    
+
     const text = document.getElementById('reviewText').value;
 
     try {
-        // First check balance
         showLoading('Checking balance...');
         const dashboard = await callContractRead('get_my_dashboard', [currentAccount]);
         const getVal = (key) => Number(dashboard instanceof Map ? dashboard.get(key) : dashboard[key] || 0);
         const balance = getVal('balance');
-        const reviewStake = 100; // 100 GEN per review
-        
+        const reviewStake = 100;
+
         if (balance < reviewStake) {
             hideLoading();
             showToast(`Insufficient balance! You need ${reviewStake} GEN to submit a review. Current balance: ${balance} GEN`, 'error');
-            
-            // Show deposit prompt
+
             if (confirm(`You need ${reviewStake - balance} more GEN to submit a review. Would you like to deposit now?`)) {
                 closeReviewModal();
                 openDepositModal();
             }
             return;
         }
-        
+
         showLoading('Checking project...');
-        
+
         const exists = await callContractRead('project_exists', [projectName]);
         if (!exists) {
             hideLoading();
             showToast(`Project "${projectName}" not found`, 'error');
             return;
         }
-        
+
         showLoading('Submitting review...');
-        
+
         await callContractWrite('submit_review', [currentAccount, projectName, parseInt(rating.value), text]);
-        
+
         closeReviewModal();
         document.getElementById('reviewForm').reset();
-        
+
         showLoading('Waiting for update...');
         const oldCount = document.getElementById('totalReviews').textContent;
         await waitForStateUpdate(async () => {
@@ -1174,11 +1125,11 @@ window.submitReview = async function(event) {
             await loadMyReviews();
             return document.getElementById('totalReviews').textContent !== oldCount;
         });
-        
+
         hideLoading();
         showToast('Review submitted!', 'success');
         navigateTo('profile');
-        
+
     } catch (error) {
         console.error('Review error:', error);
         showToast(`Submission failed: ${error.message}`, 'error');
@@ -1226,7 +1177,7 @@ async function waitForStateUpdate(checkFunction, maxAttempts = 10, delayMs = 500
         } catch (error) {
             console.log(`Attempt ${i + 1} failed:`, error.message);
         }
-        
+
         if (i < maxAttempts - 1) {
             await new Promise(resolve => setTimeout(resolve, delayMs));
             delayMs = Math.min(delayMs * 1.5, 3000);
@@ -1249,9 +1200,9 @@ function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
-    
+
     document.getElementById('toastContainer').appendChild(toast);
-    
+
     setTimeout(() => toast.remove(), 5000);
 }
 
