@@ -78,7 +78,8 @@ function handleRouteChange() {
     const [page, ...params] = hash.split('/');
     
     if (page === 'project' && params[0]) {
-        navigateTo('project-detail', params[0]);
+        // FIX 1: Decode the project name from the URL before using it
+        navigateTo('project-detail', decodeURIComponent(params[0]));
     } else {
         navigateTo(page);
     }
@@ -105,9 +106,9 @@ function navigateTo(page, param = null) {
         // Load page-specific data
         loadPageData(page, param);
         
-        // Update URL
+        // FIX 2: Encode the project name when writing it to the URL hash
         if (page === 'project-detail' && param) {
-            window.location.hash = `project/${param}`;
+            window.location.hash = `project/${encodeURIComponent(param)}`;
         } else {
             window.location.hash = page;
         }
@@ -456,8 +457,9 @@ async function displayProjects(projects, containerId) {
         const ownerDisplay = await getUserDisplay(ownerAddress);
         const ownerName = ownerDisplay.username || 'Anonymous';
 
+        // FIX 3: Encode the project name in the onclick handler so spaces don't break routing
         html += `
-            <div class="project-card" onclick="navigateTo('project-detail', '${name}')">
+            <div class="project-card" onclick="navigateTo('project-detail', '${encodeURIComponent(name)}')">
                 <div class="project-header">
                     <div>
                         <div class="project-name">${name}</div>
